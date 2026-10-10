@@ -99,6 +99,8 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
         }
         Text("Настройки сохраняются автоматически. Пустая или незавершённая передача не отображается на дашборде.",
             fontSize=12.sp,color=Color.Gray,lineHeight=16.sp)
+        Spacer(Modifier.height(15.dp))
+        Text("MiSans Latin font by Xiaomi", fontSize=10.sp, color=Color.DarkGray)
     }
     if (appPicker) AppSelectDialog(allApps, controller.pinnedApps, onToggle={pkg->
         val old=controller.pinnedApps
