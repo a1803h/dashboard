@@ -216,11 +216,53 @@ private fun SmallPill(title:String, click:()->Unit) {
     }
 }
 
+/** Capsule-shaped custom slider matching the Figma controls, without a thumb. */
 @Composable
-private fun CompactSlider(value:Float,onValueChange:(Float)->Unit,onFinish:()->Unit={}) {
-    Slider(value = value.coerceIn(0f,1f), onValueChange=onValueChange, onValueChangeFinished=onFinish,
-        modifier=Modifier.fillMaxWidth().height(38.dp),
-        colors=SliderDefaults.colors(thumbColor=Color(0xFFBFBFBF),activeTrackColor=Color(0xFFBFBFBF),inactiveTrackColor=edge))
+private fun CompactSlider(value: Float, onValueChange: (Float) -> Unit, onFinish: () -> Unit = {}) {
+    Canvas(
+        Modifier.fillMaxWidth().height(38.dp)
+            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(0f,1f),0f..1f) }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    fun update(x: Float) {
+                        onValueChange((x / size.width.coerceAtLeast(1)).coerceIn(0f,1f))
+                    }
+                    update(down.position.x)
+                    var pressed = true
+                    while (pressed) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                        if (change != null) {
+                            update(change.position.x)
+                            change.consume()
+                        }
+                        pressed = change?.pressed == true
+                    }
+                    onFinish()
+                }
+            }
+    ) {
+        val h = 29.dp.toPx()
+        val y = (size.height - h) / 2f
+        val corner = h / 2f
+        drawRoundRect(
+            color = Color(0xFF292929),
+            topLeft = Offset(0f,y),
+            size = androidx.compose.ui.geometry.Size(size.width,h),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(corner),
+            style = Stroke(width = 1.8.dp.toPx())
+        )
+        val filled = size.width * value.coerceIn(0f,1f)
+        if(filled > 0.5f) {
+            drawRoundRect(
+                color = Color(0xFFBDBDBD),
+                topLeft = Offset(0f,y),
+                size = androidx.compose.ui.geometry.Size(filled,h),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(kotlin.math.min(corner,filled/2f),corner)
+            )
+        }
+    }
 }
 
 @Composable
