@@ -208,8 +208,8 @@ class DashboardController(val context: Context) {
         pinnedApps = list.distinct().take(8)
         store.saveSelectedPackages(pinnedApps)
     }
-    fun setPlayerPackage(pkg: String) { playerPackage = pkg; store.setMusicPackage(pkg) }
-    fun setBrightness(value: Float) { brightness = value }
+    fun selectPlayerPackage(pkg: String) { playerPackage = pkg; store.setMusicPackage(pkg) }
+    fun updateBrightness(value: Float) { brightness = value }
     fun saveBrightness() { store.saveBrightness(brightness) }
     private fun persistTrip() = store.saveTrip(targetKm, distanceKm, elapsedMs)
 }
