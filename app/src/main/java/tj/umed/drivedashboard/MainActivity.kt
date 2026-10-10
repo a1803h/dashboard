@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
         setDeviceBrightness(dashboard.brightness)
         val audio = getSystemService(AUDIO_SERVICE) as AudioManager
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MaterialTheme(colorScheme = darkColorScheme(), typography = MiSansTypography) {
                 var showSettings by remember { mutableStateOf(false) }
                 BackHandler(enabled = showSettings) { showSettings = false }
                 LaunchedEffect(Unit) {
