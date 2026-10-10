@@ -150,7 +150,7 @@ private fun GearNumberField(value:String,modifier:Modifier=Modifier,error:Boolea
     Box(modifier.height(42.dp).border(1.4.dp,if(error)Color(0xFFB84646)else settingsBorder,CircleShape)
         .padding(horizontal=2.dp),contentAlignment=Alignment.Center) {
         BasicTextField(value=value,onValueChange=onValue,singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),
-            textStyle=TextStyle(color=Color.White,fontSize=15.sp,textAlign=TextAlign.Center),
+            textStyle=TextStyle(color=Color.White,fontSize=15.sp,textAlign=TextAlign.Center,fontFamily=MiSansFamily),
             cursorBrush=SolidColor(Color.White),modifier=Modifier.fillMaxWidth())
     }
 }
