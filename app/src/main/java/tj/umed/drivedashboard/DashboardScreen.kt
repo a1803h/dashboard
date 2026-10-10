@@ -81,7 +81,7 @@ fun DashboardScreen(
                     Text("AVG", color=muted, fontSize=10.sp)
                 }
             }
-            OutlineSpeed(controller.speedKmh.roundToInt().toString(), speedTint(controller.speedKmh),
+            OutlineSpeed(controller.speedKmh.roundToInt().toString(), speedTint(controller.speedKmh), controller.speedKmh,
                 Modifier.fillMaxWidth(.75f).align(Alignment.Center).height(140.dp))
             Text(controller.currentGear?.number?.toString() ?: "—",
                 Modifier.align(Alignment.CenterEnd), color = Color(0xFF707070), fontSize = 43.sp, fontWeight = FontWeight.Light)
@@ -151,18 +151,42 @@ private fun speedTint(kmh: Double) = when {
 }
 
 @Composable
-private fun OutlineSpeed(value: String, tint: Color, modifier: Modifier=Modifier) {
+private fun OutlineSpeed(value: String, tint: Color, kmh: Double, modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        val progress = (kmh / 120.0).toFloat().coerceIn(0f, 1f)
+        val strokePx = (3.1f + 2.4f * progress) * density
+        val glow = ((kmh - 60.0) / 60.0).toFloat().coerceIn(0f, 1f)
+        val typeface = android.graphics.Typeface.create("sans-serif-black", android.graphics.Typeface.BOLD)
+        val mainPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = tint.toArgb()
             style = android.graphics.Paint.Style.STROKE
-            strokeWidth = 1.65.dp.toPx()
-            typeface = android.graphics.Typeface.create("sans-serif-thin", android.graphics.Typeface.NORMAL)
+            strokeJoin = android.graphics.Paint.Join.ROUND
+            strokeCap = android.graphics.Paint.Cap.ROUND
+            strokeWidth = strokePx
+            this.typeface = typeface
             textAlign = android.graphics.Paint.Align.CENTER
-            textSize = size.height * if (value.length >= 3) 0.81f else 1.04f
+            textSize = size.height * if (value.length >= 3) 0.79f else 1.02f
         }
-        val baseline = (size.height - (paint.ascent()+paint.descent()))/2f
-        drawIntoCanvas { canvas -> canvas.nativeCanvas.drawText(value,size.width/2f,baseline,paint) }
+        val baseline = (size.height - mainPaint.ascent() - mainPaint.descent()) / 2f
+        val availableWidth = (size.width - strokePx * 5f).coerceAtLeast(1f)
+        val scaleX = (availableWidth / mainPaint.measureText(value).coerceAtLeast(1f))
+            .coerceAtMost(1f)
+        drawIntoCanvas { canvas ->
+            val native = canvas.nativeCanvas
+            native.save()
+            native.scale(scaleX, 1f, size.width / 2f, baseline)
+            if (glow > 0f) {
+                for (layer in 3 downTo 1) {
+                    val halo = android.graphics.Paint(mainPaint).apply {
+                        color = tint.copy(alpha = glow * (0.04f + (4 - layer) * 0.025f)).toArgb()
+                        strokeWidth = strokePx + (layer * 5f + 3f) * density
+                    }
+                    native.drawText(value, size.width / 2f, baseline, halo)
+                }
+            }
+            native.drawText(value, size.width / 2f, baseline, mainPaint)
+            native.restore()
+        }
     }
 }
 
