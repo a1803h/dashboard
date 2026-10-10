@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
                         onRequestGps = { requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
                         onMediaPermission = { startActivity(media.notificationPermissionIntent()) },
                         onBrightness = { value ->
-                            dashboard.setBrightness(value)
+                            dashboard.updateBrightness(value)
                             setDeviceBrightness(value)
                         },
                         onOpenApp = { pkg ->
