@@ -22,6 +22,22 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Fetch MiSans Latin from Xiaomi
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Xiaomi permits application embedding, but font files must not be
+          # redistributed separately in this public source repository.
+          curl --fail --location --retry 3 --silent --show-error \
+            'https://hyperos.mi.com/font-download/MiSans_Latin.zip' -o /tmp/misans-latin.zip
+          mkdir -p /tmp/misans-latin app/src/main/res/font
+          unzip -q /tmp/misans-latin.zip -d /tmp/misans-latin
+          for weight in Thin ExtraLight Light Regular Normal Medium Semibold Demibold Bold Heavy; do
+            font="$(find /tmp/misans-latin -type f -iname "MiSansLatin-${weight}.ttf" -print -quit)"
+            test -n "$font" || { echo "Missing MiSansLatin-${weight}.ttf" >&2; exit 1; }
+            lower="$(echo "$weight" | tr '[:upper:]' '[:lower:]')"
+            cp "$font" "app/src/main/res/font/misans_latin_${lower}.ttf"
+          done
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
