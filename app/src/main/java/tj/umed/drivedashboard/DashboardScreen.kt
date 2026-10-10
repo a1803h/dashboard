@@ -265,6 +265,42 @@ private fun CompactSlider(value: Float, onValueChange: (Float) -> Unit, onFinish
     }
 }
 
+/** Music scrubber: narrow rounded progress line without a Material thumb. */
+@Composable
+private fun PlaybackProgress(progress: Float, enabled: Boolean, onChange: (Float) -> Unit) {
+    Canvas(Modifier.fillMaxWidth().height(22.dp)
+        .pointerInput(enabled) {
+            if (enabled) awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                fun update(x: Float) { onChange((x / size.width.coerceAtLeast(1)).coerceIn(0f,1f)) }
+                update(down.position.x)
+                var pressed = true
+                while (pressed) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    if(change != null) { update(change.position.x); change.consume() }
+                    pressed = change?.pressed == true
+                }
+            }
+        }
+    ) {
+        val h = 9.dp.toPx()
+        val y = (size.height - h) / 2f
+        val radius = h / 2f
+        drawRoundRect(Color(0xFF333333), Offset(0f,y),
+            androidx.compose.ui.geometry.Size(size.width,h),
+            androidx.compose.ui.geometry.CornerRadius(radius))
+        drawRoundRect(Color(0xFF777777), Offset(0f,y),
+            androidx.compose.ui.geometry.Size(size.width,h),
+            androidx.compose.ui.geometry.CornerRadius(radius),
+            style = Stroke(width = 1.dp.toPx()))
+        val filled = size.width * progress.coerceIn(0f,1f)
+        if (filled > 0.5f) drawRoundRect(Color(0xFFBDBDBD), Offset(0f,y),
+            androidx.compose.ui.geometry.Size(filled,h),
+            androidx.compose.ui.geometry.CornerRadius(kotlin.math.min(radius,filled/2f),radius))
+    }
+}
+
 @Composable
 private fun MediaCard(media: MediaBridge,onMediaPermission:()->Unit,
     onLaunchPlayer:()->Unit,hasSelectedPlayer:Boolean) {
@@ -274,10 +310,11 @@ private fun MediaCard(media: MediaBridge,onMediaPermission:()->Unit,
         Text(m.title,maxLines=1,color=Color.White,fontWeight=FontWeight.SemiBold,fontSize=15.sp)
         Text(m.artist,maxLines=1,color=muted,fontSize=12.sp)
         Spacer(Modifier.height(7.dp))
-        Slider(value=if(m.durationMs>0)(m.positionMs.toFloat()/m.durationMs).coerceIn(0f,1f)else 0f,
-            onValueChange={media.seek(it)},enabled=m.available&&m.durationMs>0,
-            modifier=Modifier.fillMaxWidth().height(22.dp),
-            colors=SliderDefaults.colors(activeTrackColor=Color.LightGray,inactiveTrackColor=edge,thumbColor=Color.LightGray))
+        PlaybackProgress(
+            progress = if (m.durationMs > 0) (m.positionMs.toFloat()/m.durationMs).coerceIn(0f,1f) else 0f,
+            enabled = m.available && m.durationMs > 0,
+            onChange = { media.seek(it) }
+        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) {
             Text(timeForMs(m.positionMs),color=muted,fontSize=9.sp)
             Text(timeForMs(m.durationMs),color=muted,fontSize=9.sp)
