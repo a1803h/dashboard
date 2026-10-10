@@ -474,7 +474,7 @@ private fun CompactSlider(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     fun update(x: Float) {
-                        onValueChange((x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f))
+                        onValueChange((x / size.width.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f))
                     }
                     update(down.position.x)
                     var pressed = true
@@ -524,7 +524,7 @@ private fun PlaybackProgress(
         modifier.pointerInput(enabled) {
             if (enabled) awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
-                fun update(x: Float) { onChange((x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)) }
+                fun update(x: Float) { onChange((x / size.width.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f)) }
                 update(down.position.x)
                 var pressed = true
                 while (pressed) {
