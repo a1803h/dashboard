@@ -38,7 +38,6 @@ private val edge = Color(0xFF252525)
 private val chipBg = Color(0xFF242424)
 private val green = Color(0xFF00ED25)
 private val blue = Color(0xFF63CBFF)
-private val tileColors = listOf(Color.Red,Color(0xFFFFC400),Color(0xFF008AFF),green,green,Color(0xFF008AFF),Color(0xFFFFC400),Color.Red)
 
 @Composable
 fun DashboardScreen(
@@ -132,7 +131,7 @@ fun DashboardScreen(
             onLaunchPlayer = { if (controller.playerPackage.isNotBlank()) onOpenApp(controller.playerPackage) },
             hasSelectedPlayer = controller.playerPackage.isNotBlank())
         Spacer(Modifier.height(18.dp))
-        PinnedAppGrid(controller.pinnedApps, onOpenApp, onSettings)
+        PinnedAppGrid(controller.pinnedApps, onOpenApp)
         Spacer(Modifier.height(25.dp))
         SmallPill("Settings",onSettings)
     }
@@ -263,27 +262,36 @@ private fun MediaCard(media: MediaBridge,onMediaPermission:()->Unit,
 }
 
 @Composable
-private fun PinnedAppGrid(packages:List<String>,onOpenApp:(String)->Unit,onSelect:()->Unit) {
-    val context=LocalContext.current
-    Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        for (r in 0..1) {
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                for (c in 0..3) {
-                    val index=r*4+c
-                    val pkg=packages.getOrNull(index)
-                    Box(Modifier.size(60.dp).clip(RoundedCornerShape(13.dp)).background(tileColors[index])
-                        .clickable { if(pkg==null) onSelect() else onOpenApp(pkg) },contentAlignment=Alignment.Center) {
-                        if (pkg==null) {
-                            Text("App\nicon",color=Color.White,fontSize=13.sp,fontWeight=FontWeight.SemiBold,lineHeight=17.sp)
-                        } else {
-                            val bmp=remember(pkg) { runCatching { context.packageManager.getApplicationIcon(pkg).toBitmap(96,96).asImageBitmap() }.getOrNull() }
-                            val name=remember(pkg){runCatching {
-                                val info=context.packageManager.getApplicationInfo(pkg,0)
-                                context.packageManager.getApplicationLabel(info).toString()
-                            }.getOrDefault("App")}
-                            Column(horizontalAlignment=Alignment.CenterHorizontally) {
-                                if (bmp!=null) Image(bmp,name,Modifier.size(36.dp))
-                                Text(name,color=Color.White,fontSize=8.sp,maxLines=1,modifier=Modifier.fillMaxWidth(),textAlign=TextAlign.Center)
+private fun PinnedAppGrid(packages: List<String>, onOpenApp: (String) -> Unit) {
+    val context = LocalContext.current
+    if (packages.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        for (row in 0..1) {
+            if (row * 4 >= packages.size) break
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                for (column in 0..3) {
+                    val pkg = packages.getOrNull(row * 4 + column)
+                    Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) {
+                        if (pkg != null) {
+                            val image = remember(pkg) {
+                                runCatching {
+                                    context.packageManager.getApplicationIcon(pkg)
+                                        .toBitmap(144, 144).asImageBitmap()
+                                }.getOrNull()
+                            }
+                            if (image != null) {
+                                val label = remember(pkg) {
+                                    runCatching {
+                                        context.packageManager.getApplicationLabel(
+                                            context.packageManager.getApplicationInfo(pkg, 0)
+                                        ).toString()
+                                    }.getOrDefault(pkg)
+                                }
+                                Image(
+                                    bitmap = image,
+                                    contentDescription = label,
+                                    modifier = Modifier.fillMaxSize().clickable { onOpenApp(pkg) }
+                                )
                             }
                         }
                     }
