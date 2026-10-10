@@ -141,7 +141,7 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
     },onDismiss={appPicker=false})
     if(appOrder) AppOrderDialog(allApps,controller.pinnedApps,controller::setPinned,{appOrder=false})
     if(playerPicker) PlayerSelectDialog(allApps,controller.playerPackage,
-        onChoose={controller.setPlayerPackage(it);playerPicker=false},onDismiss={playerPicker=false})
+        onChoose={controller.selectPlayerPackage(it);playerPicker=false},onDismiss={playerPicker=false})
     if(creditsDialog) AlertDialog(onDismissRequest={creditsDialog=false},
         title={Text("Font credits")},
         text={Text("MiSans Latin font by Xiaomi. Fonts embedded for display in DriveDashboard; see the MiSans fonts intellectual property license agreement.")},
