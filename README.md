@@ -62,3 +62,8 @@ java -jar /tmp/gear-tests.jar
 ## Лицензия
 
 MIT. Код рассчитан на публикацию как отдельный открытый репозиторий.
+## Typography
+The app embeds Xiaomi MiSans Latin fonts in the built APK. The fonts are downloaded
+from Xiaomi at build time, not redistributed individually in this public source tree.
+MiSans is acknowledged under the Xiaomi MiSans Fonts Intellectual Property License Agreement.
+See https://hyperos.mi.com/font/en/download/.
