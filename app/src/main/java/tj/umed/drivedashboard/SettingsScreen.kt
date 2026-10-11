@@ -154,8 +154,11 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            if (controller.refreshRateHz == 0) "Auto"
-                            else "${controller.refreshRateHz} Hz",
+                            when (controller.refreshRateHz) {
+                                0 -> "Auto (system)"
+                                DisplayRefresh.ADAPTIVE_60 -> "Auto 60 (Adaptive)"
+                                else -> "${controller.refreshRateHz} Hz"
+                            },
                             color = Color.White,
                             fontFamily = MiSansFamily,
                             fontSize = f(43f)
@@ -167,16 +170,19 @@ fun SettingsScreen(
                         expanded = refreshMenuExpanded,
                         onDismissRequest = { refreshMenuExpanded = false }
                     ) {
-                        val choices = (listOf(0, 10, 30) + availableRefreshRates).distinct().sorted()
+                        val choices = listOf(0, DisplayRefresh.ADAPTIVE_60) +
+                            (listOf(10, 30) + availableRefreshRates).distinct().sorted()
                         choices.forEach { hz ->
-                            val supported = hz == 0 || hz in availableRefreshRates
+                            val supported = hz == 0 || hz == DisplayRefresh.ADAPTIVE_60 ||
+                                hz in availableRefreshRates
                             DropdownMenuItem(
                                 enabled = supported,
                                 text = {
                                     Text(
                                         when {
                                             hz == 0 -> "Auto (system)"
-                                            supported -> "${hz} Hz"
+                                            hz == DisplayRefresh.ADAPTIVE_60 -> "Auto 60 (Adaptive)"
+                                            supported -> "${hz} Hz (fixed request)"
                                             else -> "${hz} Hz — unsupported"
                                         },
                                         fontFamily = MiSansFamily
@@ -196,7 +202,9 @@ fun SettingsScreen(
                         (if (availableRefreshRates.isEmpty()) "system controlled"
                          else availableRefreshRates.joinToString(", ") { "$it Hz" }) +
                         ". Android/HyperOS may override the requested rate. " +
-                        "10 or 30 Hz cannot be forced unless supported by the panel.",
+                        "Auto 60 requests a 60 Hz preference without pinning a " +
+                        "physical mode, so HyperOS may still downshift on static screens. " +
+                        "Android can ignore the request; true LTPO 1–60 Hz is not guaranteed.",
                     fontFamily = MiSansFamily,
                     fontSize = f(27f),
                     color = Color(0xFF9A9A9A),
