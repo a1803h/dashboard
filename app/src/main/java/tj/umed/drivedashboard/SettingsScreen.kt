@@ -66,13 +66,19 @@ private fun installedLaunchableApps(context: Context): List<LaunchApp> {
  * Vertical scrolling permits access to all six gears without compressing the layout.
  */
 @Composable
-fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
+fun SettingsScreen(
+    controller: DashboardController,
+    onBack: () -> Unit,
+    availableRefreshRates: List<Int>,
+    onRefreshRateChange: (Int) -> Unit
+) {
     val context = LocalContext.current
     val allApps = remember { installedLaunchableApps(context) }
     var appPicker by remember { mutableStateOf(false) }
     var appOrder by remember { mutableStateOf(false) }
     var playerPicker by remember { mutableStateOf(false) }
     var creditsDialog by remember { mutableStateOf(false) }
+    var refreshMenuExpanded by remember { mutableStateOf(false) }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(settingsBg)) {
         val scale = maxWidth.value / 1080f
@@ -125,6 +131,77 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
                         )
                     }
                 }
+            }
+            // Additional V1 feature below the original Figma settings frame,
+            // so none of the six gear cards or Figma coordinates are shifted.
+            Column(
+                Modifier.width(d(998f)).padding(top = d(36f), bottom = d(20f)),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    "Display refresh rate",
+                    color = Color.White,
+                    fontFamily = MiSansFamily,
+                    fontSize = f(50f),
+                    fontWeight = FontWeight.Normal
+                )
+                Spacer(Modifier.height(d(22f)))
+                Box {
+                    Row(
+                        Modifier.clip(CircleShape).background(settingsChip)
+                            .clickable { refreshMenuExpanded = true }
+                            .padding(horizontal = d(44f), vertical = d(22f)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (controller.refreshRateHz == 0) "Auto"
+                            else "${controller.refreshRateHz} Hz",
+                            color = Color.White,
+                            fontFamily = MiSansFamily,
+                            fontSize = f(43f)
+                        )
+                        Spacer(Modifier.width(d(20f)))
+                        Text("▾", color = Color.LightGray, fontSize = f(38f))
+                    }
+                    DropdownMenu(
+                        expanded = refreshMenuExpanded,
+                        onDismissRequest = { refreshMenuExpanded = false }
+                    ) {
+                        val choices = (listOf(0, 10, 30) + availableRefreshRates).distinct().sorted()
+                        choices.forEach { hz ->
+                            val supported = hz == 0 || hz in availableRefreshRates
+                            DropdownMenuItem(
+                                enabled = supported,
+                                text = {
+                                    Text(
+                                        when {
+                                            hz == 0 -> "Auto (system)"
+                                            supported -> "${hz} Hz"
+                                            else -> "${hz} Hz — unsupported"
+                                        },
+                                        fontFamily = MiSansFamily
+                                    )
+                                },
+                                onClick = {
+                                    onRefreshRateChange(hz)
+                                    refreshMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(d(22f)))
+                Text(
+                    "Available display modes: " +
+                        (if (availableRefreshRates.isEmpty()) "system controlled"
+                         else availableRefreshRates.joinToString(", ") { "$it Hz" }) +
+                        ". Android/HyperOS may override the requested rate. " +
+                        "10 or 30 Hz cannot be forced unless supported by the panel.",
+                    fontFamily = MiSansFamily,
+                    fontSize = f(27f),
+                    color = Color(0xFF9A9A9A),
+                    lineHeight = f(39f)
+                )
             }
             // Credit is outside the original frame, preserving its pixel geometry.
             Text(
