@@ -315,7 +315,7 @@ private fun DestinationCluster(
         Text("Distance traveled ${formatKm(controller.distanceKm)}",
             modifier=Modifier.offset(x=s(0f),y=s(146.941f)),
             color=Color.White,fontSize=spx(31.888f),fontFamily=MiSansFamily,fontWeight=FontWeight.Normal)
-        Box(Modifier.offset(x=s(797f),y=s(146.941f)).width(s(200f)),
+        Box(Modifier.offset(x=s(797f),y=s(160.941f)).width(s(200f)),
             contentAlignment=Alignment.CenterEnd) {
             Text("Total ${if(controller.targetKm>0) formatKm(controller.targetKm) else "—"}",
                 modifier=Modifier.fillMaxWidth().basicMarquee(
@@ -327,7 +327,7 @@ private fun DestinationCluster(
         SmallPill("Reset",onReset,spx(35f),
             Modifier.offset(x=s(0f),y=s(213.235f)).size(s(224f),s(81f)))
         SmallPill("Edit",onEdit,spx(35f),
-            Modifier.offset(x=s(774.471f),y=s(214.192f)).size(s(224f),s(81f)))
+            Modifier.offset(x=s(774.471f),y=s(213.235f)).size(s(224f),s(81f)))
     }
 }
 
