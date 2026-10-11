@@ -298,9 +298,9 @@ private fun DestinationCluster(
         FigmaMetric("Remaining",if(controller.targetKm>0) formatKm(remainingKm) else "—",
             scale,Modifier.offset(x=s(0f),y=s(0f)).size(s(185f),s(96f)),TextAlign.Start)
         FigmaMetric("Travel time",formatMinutes(controller.elapsedMs),scale,
-            Modifier.offset(x=s(419.294f),y=s(0f)).size(s(160f),s(96f)),TextAlign.Center)
+            Modifier.offset(x=s(374.294f),y=s(0f)).size(s(250f),s(96f)),TextAlign.Center)
         FigmaMetric("Arrival In",controller.arrivalMinutes?.let { "$it min" } ?: "—",scale,
-            Modifier.offset(x=s(823.412f),y=s(0f)).size(s(174f),s(96f)),TextAlign.End)
+            Modifier.offset(x=s(797.412f),y=s(0f)).size(s(200f),s(96f)),TextAlign.End)
         Canvas(Modifier.offset(x=s(0f),y=s(112.235f)).size(s(997.412f),s(29.647f))) {
             val h=size.height
             drawRoundRect(Color.Black,cornerRadius=CornerRadius(h/2f))
@@ -348,12 +348,12 @@ private fun UtilitySliders(
     fun s(px:Float):Dp=(px*scale).dp
     fun spx(px:Float)=(px*scale).sp
     Box(modifier) {
-        Box(Modifier.offset(x=s(0f),y=s(0f)).size(s(479.647f),s(42f)),contentAlignment=Alignment.Center) {
+        Box(Modifier.offset(x=s(0f),y=s(-12f)).size(s(479.647f),s(42f)),contentAlignment=Alignment.Center) {
             Text("Brightness",fontSize=spx(31.423f),fontFamily=MiSansFamily,
                 fontWeight=FontWeight.Medium,color=Color.White,
                 lineHeight=spx(42f),maxLines=1,softWrap=false)
         }
-        Box(Modifier.offset(x=s(517.765f),y=s(0f)).size(s(479.647f),s(42f)),contentAlignment=Alignment.Center) {
+        Box(Modifier.offset(x=s(517.765f),y=s(-12f)).size(s(479.647f),s(42f)),contentAlignment=Alignment.Center) {
             Text("Volume",fontSize=spx(31.423f),fontFamily=MiSansFamily,
                 fontWeight=FontWeight.Medium,color=Color.White)
         }
@@ -590,10 +590,10 @@ private fun MediaCard(
             enabled=m.available && m.durationMs>0,onChange={media.seek(it)},
             modifier=Modifier.offset(x=d(33.882f),y=d(182.118f)).size(d(929.647f),d(29.647f))
         )
-        Row(Modifier.offset(x=d(33.882f),y=d(221.294f)).size(d(926.235f),d(28f)),
+        Row(Modifier.offset(x=d(33.882f),y=d(221.294f)).width(d(926.235f)),
             horizontalArrangement=Arrangement.SpaceBetween) {
-            Text(timeForMs(m.positionMs),color=Color(0xFF808080),fontSize=f(21.176f),fontFamily=MiSansFamily)
-            Text(timeForMs(m.durationMs),color=Color(0xFF808080),fontSize=f(21.176f),fontFamily=MiSansFamily)
+            Text(timeForMs(m.positionMs),color=Color(0xFF808080),fontSize=f(21.176f),lineHeight=f(28f),maxLines=1,softWrap=false,fontFamily=MiSansFamily)
+            Text(timeForMs(m.durationMs),color=Color(0xFF808080),fontSize=f(21.176f),lineHeight=f(28f),maxLines=1,softWrap=false,fontFamily=MiSansFamily)
         }
         // Pixel-exact Figma vector artwork; hit regions remain independent Android controls.
         Box(Modifier.offset(x=d(99.529f),y=d(252f)).size(d(794.891f),d(147.176f))) {
@@ -604,7 +604,7 @@ private fun MediaCard(
             )
             if(m.playing) {
                 Canvas(Modifier.offset(x=d(363f),y=d(10f)).size(d(109f),d(128f))) {
-                    drawRect(Color.Black)
+                    drawRect(pageBg)
                     drawRoundRect(Color.White,
                         topLeft=Offset(size.width*.16f,size.height*.12f),
                         size=Size(size.width*.25f,size.height*.77f),
