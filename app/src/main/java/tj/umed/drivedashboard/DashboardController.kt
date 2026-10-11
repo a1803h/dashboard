@@ -233,7 +233,7 @@ class DashboardController(val context: Context) {
     fun updateBrightness(value: Float) { brightness = value }
     fun saveBrightness() { store.saveBrightness(brightness) }
     fun selectRefreshRate(hz: Int) {
-        refreshRateHz = hz.coerceAtLeast(0)
+        refreshRateHz = if (hz == -60 || hz == 0 || hz > 0) hz else 0
         store.saveRefreshRateHz(refreshRateHz)
     }
 
