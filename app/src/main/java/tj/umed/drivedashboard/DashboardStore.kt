@@ -44,10 +44,13 @@ class DashboardStore(context: Context) {
     fun targetKm(): Double = prefs.getFloat("trip_total", 0f).toDouble()
     fun distanceKm(): Double = prefs.getFloat("trip_distance", 0f).toDouble()
     fun travelMs(): Long = prefs.getLong("trip_elapsed", 0L)
-    fun saveTrip(target: Double, distance: Double, duration: Long) {
+    /** Epoch of the first confirmed driving movement; zero means not started yet. */
+    fun tripStartedEpochMs(): Long = prefs.getLong("trip_started_epoch_ms", 0L)
+    fun saveTrip(target: Double, distance: Double, duration: Long, startedEpochMs: Long?) {
         prefs.edit().putFloat("trip_total", target.toFloat())
             .putFloat("trip_distance", distance.toFloat())
-            .putLong("trip_elapsed", duration).apply()
+            .putLong("trip_elapsed", duration)
+            .putLong("trip_started_epoch_ms", startedEpochMs ?: 0L).apply()
     }
     fun brightness(): Float = prefs.getFloat("brightness", 0.70f)
     fun saveBrightness(value: Float) = prefs.edit().putFloat("brightness", value).apply()
