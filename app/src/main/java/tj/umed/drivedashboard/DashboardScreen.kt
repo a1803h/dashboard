@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -100,6 +101,7 @@ fun DashboardScreen(
     audio: AudioManager,
     onSettings: () -> Unit,
     onRequestGps: () -> Unit,
+    onGpsRescan: () -> Unit,
     onMediaPermission: () -> Unit,
     onBrightness: (Float) -> Unit,
     onOpenApp: (String) -> Unit
@@ -139,6 +141,7 @@ fun DashboardScreen(
 
                 SpeedCluster(
                     controller = controller,
+                    onGpsRescan = onGpsRescan,
                     scale = scale,
                     modifier = Modifier
                         .offset(x = s(88.941f), y = s(183.176f))
@@ -260,7 +263,12 @@ private fun TopBar(
 }
 
 @Composable
-private fun SpeedCluster(controller: DashboardController, scale: Float, modifier: Modifier = Modifier) {
+private fun SpeedCluster(
+    controller: DashboardController,
+    onGpsRescan: () -> Unit,
+    scale: Float,
+    modifier: Modifier = Modifier
+) {
     fun s(px: Float): Dp = (px * scale).dp
     fun spx(px: Float) = (px * scale).sp
     Box(modifier) {
@@ -278,6 +286,9 @@ private fun SpeedCluster(controller: DashboardController, scale: Float, modifier
             value=controller.speedKmh.roundToInt().toString(),
             tint=speedTint(controller.speedKmh),kmh=controller.speedKmh,designScale=scale,
             modifier=Modifier.offset(x=s(172.588f),y=s(0f)).size(s(557f),s(611f))
+                .pointerInput(onGpsRescan) {
+                    detectTapGestures(onDoubleTap = { onGpsRescan() })
+                }
         )
         Box(Modifier.offset(x=s(795.176f),y=s(213.882f)).size(s(78f),s(182f)),
             contentAlignment=Alignment.Center) {
