@@ -2,6 +2,7 @@ package tj.umed.drivedashboard
 
 import android.media.AudioManager
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
@@ -179,7 +180,7 @@ fun DashboardScreen(
                     scale = scale,
                     modifier = Modifier
                         .offset(x = s(41.294f), y = s(1336.677f))
-                        .size(s(997.412f), s(462.706f))
+                        .size(s(997.412f), s(526.706f))
                 )
 
                 PinnedAppGrid(
@@ -189,7 +190,7 @@ fun DashboardScreen(
                     columnGap = s(72.235f),
                     rowGap = s(54f),
                     modifier = Modifier
-                        .offset(x = s(41.294f), y = s(1863.677f))
+                        .offset(x = s(41.294f), y = s(1927.677f))
                         .size(s(998.471f), s(444.706f))
                 )
 
@@ -198,7 +199,7 @@ fun DashboardScreen(
                     click = onSettings,
                     textSize = spx(56f),
                     modifier = Modifier
-                        .offset(x = s(402.353f), y = s(2386.588f))
+                        .offset(x = s(402.353f), y = s(2450.588f))
                         .size(s(276.706f), s(97.412f))
                 )
             }
@@ -314,10 +315,14 @@ private fun DestinationCluster(
         Text("Distance traveled ${formatKm(controller.distanceKm)}",
             modifier=Modifier.offset(x=s(0f),y=s(160.941f)),
             color=Color.White,fontSize=spx(31.888f),fontFamily=MiSansFamily,fontWeight=FontWeight.Normal)
-        Box(Modifier.offset(x=s(820f),y=s(160.941f)).size(s(177f),s(42f)),
+        Box(Modifier.offset(x=s(797f),y=s(160.941f)).width(s(200f)),
             contentAlignment=Alignment.CenterEnd) {
             Text("Total ${if(controller.targetKm>0) formatKm(controller.targetKm) else "—"}",
-                color=Color.White,fontSize=spx(31.888f),fontFamily=MiSansFamily,maxLines=1)
+                modifier=Modifier.fillMaxWidth().basicMarquee(
+                    iterations=Int.MAX_VALUE,initialDelayMillis=1400,repeatDelayMillis=1800,velocity=18.dp
+                ),
+                color=Color.White,fontSize=spx(31.888f),lineHeight=spx(42f),
+                fontFamily=MiSansFamily,maxLines=1,softWrap=false,textAlign=TextAlign.End)
         }
         SmallPill("Reset",onReset,spx(31.888f),
             Modifier.offset(x=s(0f),y=s(220.235f)).size(s(207.529f),s(74.971f)))
@@ -348,14 +353,17 @@ private fun UtilitySliders(
     fun s(px:Float):Dp=(px*scale).dp
     fun spx(px:Float)=(px*scale).sp
     Box(modifier) {
-        Box(Modifier.offset(x=s(0f),y=s(-12f)).size(s(479.647f),s(42f)),contentAlignment=Alignment.Center) {
+        Box(Modifier.offset(x=s(0f),y=s(-24f)).size(s(479.647f),s(60f)),contentAlignment=Alignment.Center) {
             Text("Brightness",fontSize=spx(31.423f),fontFamily=MiSansFamily,
                 fontWeight=FontWeight.Medium,color=Color.White,
                 lineHeight=spx(42f),maxLines=1,softWrap=false)
         }
-        Box(Modifier.offset(x=s(517.765f),y=s(-12f)).size(s(479.647f),s(42f)),contentAlignment=Alignment.Center) {
-            Text("Volume",fontSize=spx(31.423f),fontFamily=MiSansFamily,
-                fontWeight=FontWeight.Medium,color=Color.White)
+        Box(Modifier.offset(x=s(517.765f),y=s(-24f)).size(s(479.647f),s(60f)),contentAlignment=Alignment.Center) {
+            Text("Volume",modifier=Modifier.fillMaxWidth().basicMarquee(
+                iterations=Int.MAX_VALUE,initialDelayMillis=1400,repeatDelayMillis=1800,velocity=18.dp
+            ),fontSize=spx(31.423f),lineHeight=spx(42f),fontFamily=MiSansFamily,
+                fontWeight=FontWeight.Medium,color=Color.White,
+                maxLines=1,softWrap=false,textAlign=TextAlign.Center)
         }
         CompactSlider(controller.brightness,onBrightness,controller::saveBrightness,scale,
             Modifier.offset(x=s(0f),y=s(54.323f)).size(s(479.647f),s(104.706f)))
@@ -569,34 +577,42 @@ private fun MediaCard(
     fun f(px:Float)=(px*scale).sp
     val m=media.state
     Box(modifier.border(d(5.294f),Color(0xFF212121),RoundedCornerShape(d(54f)))) {
-        Box(Modifier.offset(y=d(47.647f)).fillMaxWidth().height(d(64f)),
+        Box(Modifier.offset(y=d(58f)).fillMaxWidth().height(d(70f)),
             contentAlignment=Alignment.Center) {
-            Text(m.title,maxLines=1,color=Color.White,fontFamily=MiSansFamily,
+            Text(m.title,maxLines=1,softWrap=false,textAlign=TextAlign.Center,
+                lineHeight=f(64f),color=Color.White,fontFamily=MiSansFamily,
                 fontWeight=FontWeight.SemiBold,fontSize=f(48.629f),
-                modifier=Modifier.clickable(
+                modifier=Modifier.fillMaxWidth().padding(horizontal=d(42f))
+                .basicMarquee(iterations=Int.MAX_VALUE,initialDelayMillis=1400,
+                    repeatDelayMillis=1800,velocity=18.dp)
+                .clickable(
                     enabled = !media.hasNotificationAccess || hasSelectedPlayer
                 ) {
                     if(!media.hasNotificationAccess) onMediaPermission()
                     else onLaunchPlayer()
                 })
         }
-        Box(Modifier.offset(y=d(110.117f)).fillMaxWidth().height(d(49f)),
+        Box(Modifier.offset(y=d(130f)).fillMaxWidth().height(d(61f)),
             contentAlignment=Alignment.Center) {
-            Text(m.artist,maxLines=1,color=Color(0xFF808080),fontFamily=MiSansFamily,
-                fontWeight=FontWeight.Normal,fontSize=f(37.059f))
+            Text(m.artist,maxLines=1,softWrap=false,textAlign=TextAlign.Center,
+                lineHeight=f(49f),color=Color(0xFF808080),fontFamily=MiSansFamily,
+                fontWeight=FontWeight.Normal,fontSize=f(37.059f),
+                modifier=Modifier.fillMaxWidth().padding(horizontal=d(42f))
+                    .basicMarquee(iterations=Int.MAX_VALUE,initialDelayMillis=1800,
+                        repeatDelayMillis=1800,velocity=15.dp))
         }
         PlaybackProgress(
             progress=if(m.durationMs>0) (m.positionMs.toFloat()/m.durationMs).coerceIn(0f,1f) else 0f,
             enabled=m.available && m.durationMs>0,onChange={media.seek(it)},
-            modifier=Modifier.offset(x=d(33.882f),y=d(182.118f)).size(d(929.647f),d(29.647f))
+            modifier=Modifier.offset(x=d(33.882f),y=d(220f)).size(d(929.647f),d(29.647f))
         )
-        Row(Modifier.offset(x=d(33.882f),y=d(221.294f)).width(d(926.235f)),
+        Row(Modifier.offset(x=d(33.882f),y=d(266f)).width(d(926.235f)),
             horizontalArrangement=Arrangement.SpaceBetween) {
             Text(timeForMs(m.positionMs),color=Color(0xFF808080),fontSize=f(21.176f),lineHeight=f(28f),maxLines=1,softWrap=false,fontFamily=MiSansFamily)
             Text(timeForMs(m.durationMs),color=Color(0xFF808080),fontSize=f(21.176f),lineHeight=f(28f),maxLines=1,softWrap=false,fontFamily=MiSansFamily)
         }
         // Pixel-exact Figma vector artwork; hit regions remain independent Android controls.
-        Box(Modifier.offset(x=d(99.529f),y=d(252f)).size(d(794.891f),d(147.176f))) {
+        Box(Modifier.offset(x=d(99.529f),y=d(304f)).size(d(794.891f),d(147.176f))) {
             Image(
                 painter=painterResource(R.drawable.figma_media_controls),
                 contentDescription=null,contentScale=ContentScale.FillBounds,
