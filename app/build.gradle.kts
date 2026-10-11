@@ -10,8 +10,8 @@ android {
         applicationId = "tj.umed.drivedashboard"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.0.0-alpha10-layout-fix"
+        versionCode = 11
+        versionName = "1.0.0-alpha11-gps-refresh"
     }
     buildTypes {
         release { isMinifyEnabled = false }
