@@ -52,10 +52,13 @@ class DashboardStore(context: Context) {
             .putLong("trip_elapsed", duration)
             .putLong("trip_started_epoch_ms", startedEpochMs ?: 0L).apply()
     }
-    /** 0 means Android chooses automatically. Display modes are device-dependent. */
+    /**
+     * 0 = no refresh preference, -60 = 60 Hz preference without pinning a
+     * physical display mode, positive = request a specific advertised mode.
+     */
     fun refreshRateHz(): Int = prefs.getInt("preferred_refresh_rate_hz", 0)
     fun saveRefreshRateHz(hz: Int) = prefs.edit()
-        .putInt("preferred_refresh_rate_hz", hz.coerceAtLeast(0)).apply()
+        .putInt("preferred_refresh_rate_hz", if (hz == -60 || hz == 0 || hz > 0) hz else 0).apply()
     fun brightness(): Float = prefs.getFloat("brightness", 0.70f)
     fun saveBrightness(value: Float) = prefs.edit().putFloat("brightness", value).apply()
 }
