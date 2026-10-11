@@ -1,7 +1,7 @@
 name: Build Android APK
 on:
   push:
-    branches: [main]
+    branches: [main, figma-1to1-layout]
   workflow_dispatch:
 
 jobs:
