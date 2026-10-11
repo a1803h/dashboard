@@ -372,24 +372,40 @@ private fun UtilitySliders(
     }
 }
 
+/**
+ * Figma speed swatches:
+ * 0 km/h: grey #696969, 1px outline;
+ * 20 km/h: white #FFFFFF, 5px;
+ * 60 km/h: green #00FF00, 15px;
+ * 80 km/h: yellow #FFD900, 15px;
+ * 90 km/h: red #FF0000, 15px.
+ * No fill, shadow or outer glow.
+ */
 private fun speedTint(kmh: Double) = when {
-    kmh >= 90.0 -> Color(0xFFFF1818)
-    kmh >= 80.0 -> Color(0xFFFFDA00)
-    kmh > 60.0 -> Color(0xFF00FA16)
+    kmh <= 0.0 -> Color(0xFF696969)
+    kmh >= 90.0 -> Color(0xFFFF0000)
+    kmh >= 80.0 -> Color(0xFFFFD900)
+    kmh >= 60.0 -> Color(0xFF00FF00)
     else -> Color.White
+}
+
+private fun speedOutlineWeight(kmh: Double): Float = when {
+    kmh <= 0.0 -> 1f
+    kmh < 20.0 -> 1f + (kmh / 20.0 * 4.0).toFloat()
+    kmh < 60.0 -> 5f + ((kmh - 20.0) / 40.0 * 10.0).toFloat()
+    else -> 15f
 }
 
 @Composable
 private fun OutlineSpeed(value: String, tint: Color, kmh: Double, designScale:Float, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val speedTypeface = remember(context) {
-        ResourcesCompat.getFont(context, R.font.misans_latin_semibold) ?: android.graphics.Typeface.DEFAULT_BOLD
+        ResourcesCompat.getFont(context, R.font.misans_latin_semibold)
+            ?: android.graphics.Typeface.DEFAULT_BOLD
     }
     Canvas(modifier) {
-        val progress = (kmh / 120.0).toFloat().coerceIn(0f, 1f)
-        val strokePx = (5.294117f + 3.2f * progress) * designScale * density
-        val glow = ((kmh - 60.0) / 60.0).toFloat().coerceIn(0f, 1f)
-        val mainPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        val strokePx = speedOutlineWeight(kmh) * designScale * density
+        val outline = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = tint.toArgb()
             style = android.graphics.Paint.Style.STROKE
             strokeJoin = android.graphics.Paint.Join.ROUND
@@ -399,23 +415,14 @@ private fun OutlineSpeed(value: String, tint: Color, kmh: Double, designScale:Fl
             textAlign = android.graphics.Paint.Align.CENTER
             textSize = 460.545f * designScale * density
         }
-        val baseline = (size.height - mainPaint.ascent() - mainPaint.descent()) / 2f
+        val baseline = (size.height - outline.ascent() - outline.descent()) / 2f
         val availableWidth = (size.width - strokePx * 6f).coerceAtLeast(1f)
-        val scaleX = (availableWidth / mainPaint.measureText(value).coerceAtLeast(1f)).coerceAtMost(1f)
+        val scaleX = (availableWidth / outline.measureText(value).coerceAtLeast(1f)).coerceAtMost(1f)
         drawIntoCanvas { canvas ->
             val native = canvas.nativeCanvas
             native.save()
             native.scale(scaleX, 1f, size.width / 2f, baseline)
-            if (glow > 0f) {
-                for (layer in 4 downTo 1) {
-                    val halo = android.graphics.Paint(mainPaint).apply {
-                        color = tint.copy(alpha = glow * (0.035f + (5 - layer) * 0.02f)).toArgb()
-                        strokeWidth = strokePx + (layer * 6f + 4f) * designScale * density
-                    }
-                    native.drawText(value, size.width / 2f, baseline, halo)
-                }
-            }
-            native.drawText(value, size.width / 2f, baseline, mainPaint)
+            native.drawText(value, size.width / 2f, baseline, outline)
             native.restore()
         }
     }
