@@ -10,8 +10,8 @@ android {
         applicationId = "tj.umed.drivedashboard"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.0.0-alpha7-trip-marquee"
+        versionCode = 8
+        versionName = "1.0.0-alpha8-figma-outline"
     }
     buildTypes {
         release { isMinifyEnabled = false }
