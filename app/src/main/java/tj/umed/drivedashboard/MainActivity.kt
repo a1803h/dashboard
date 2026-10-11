@@ -1,6 +1,9 @@
 package tj.umed.drivedashboard
 
 import android.Manifest
+import android.content.Intent
+import android.location.LocationManager
+import android.provider.Settings
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Bundle
@@ -13,6 +16,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 
@@ -37,7 +42,11 @@ class MainActivity : ComponentActivity() {
         setDeviceBrightness(dashboard.brightness)
         val audio = getSystemService(AUDIO_SERVICE) as AudioManager
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(), typography = MiSansTypography) {
+            // Scale UI dimensions and MiSans glyphs from Figma consistently.
+            // System font magnification otherwise clips text in fixed-height Figma rows.
+            val systemDensity = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(systemDensity.density, fontScale = 1f)) {
+                MaterialTheme(colorScheme = darkColorScheme(), typography = MiSansTypography) {
                 var showSettings by remember { mutableStateOf(false) }
                 BackHandler(enabled = showSettings) { showSettings = false }
                 LaunchedEffect(Unit) {
@@ -60,7 +69,7 @@ class MainActivity : ComponentActivity() {
                         media = media,
                         audio = audio,
                         onSettings = { showSettings = true },
-                        onRequestGps = { requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+                        onRequestGps = ::requestGpsAccess,
                         onMediaPermission = { startActivity(media.notificationPermissionIntent()) },
                         onBrightness = { value ->
                             dashboard.updateBrightness(value)
@@ -73,12 +82,26 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+              }
             }
         }
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
+    private fun requestGpsAccess() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            return
+        }
+        val location = getSystemService(LOCATION_SERVICE) as LocationManager
+        if (!location.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+        } else {
+            dashboard.start()
+        }
+    }
+
     private fun setDeviceBrightness(value: Float) {
         val params = window.attributes
         params.screenBrightness = value.coerceIn(0.02f, 1f) // Only this window; no WRITE_SETTINGS permission
