@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Bundle
+import android.widget.Toast
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,6 +25,7 @@ import androidx.lifecycle.Lifecycle
 class MainActivity : ComponentActivity() {
     private lateinit var dashboard: DashboardController
     private lateinit var media: MediaBridge
+    private lateinit var displayRefresh: DisplayRefresh
     private val requestLocation = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) dashboard.start()
     }
@@ -31,6 +33,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         dashboard = DashboardController(this)
         media = MediaBridge(this)
+        displayRefresh = DisplayRefresh(this)
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = (android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
             android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -40,6 +43,7 @@ class MainActivity : ComponentActivity() {
             android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setDeviceBrightness(dashboard.brightness)
+        displayRefresh.apply(window, dashboard.refreshRateHz)
         val audio = getSystemService(AUDIO_SERVICE) as AudioManager
         setContent {
             // Scale UI dimensions and MiSans glyphs from Figma consistently.
@@ -61,7 +65,12 @@ class MainActivity : ComponentActivity() {
                 if (showSettings) {
                     SettingsScreen(
                         controller = dashboard,
-                        onBack = { showSettings = false }
+                        onBack = { showSettings = false },
+                        availableRefreshRates = displayRefresh.availableHz(),
+                        onRefreshRateChange = { rate ->
+                            dashboard.selectRefreshRate(rate)
+                            displayRefresh.apply(window, rate)
+                        }
                     )
                 } else {
                     DashboardScreen(
@@ -70,6 +79,7 @@ class MainActivity : ComponentActivity() {
                         audio = audio,
                         onSettings = { showSettings = true },
                         onRequestGps = ::requestGpsAccess,
+                        onGpsRescan = ::rescanGpsFromSpeed,
                         onMediaPermission = { startActivity(media.notificationPermissionIntent()) },
                         onBrightness = { value ->
                             dashboard.updateBrightness(value)
@@ -89,6 +99,11 @@ class MainActivity : ComponentActivity() {
             requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
+    private fun rescanGpsFromSpeed() {
+        val message = dashboard.rescanGps()
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
     private fun requestGpsAccess() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -110,6 +125,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (::dashboard.isInitialized) dashboard.start()
+        if (::displayRefresh.isInitialized && ::dashboard.isInitialized) {
+            displayRefresh.apply(window, dashboard.refreshRateHz)
+        }
         if (::media.isInitialized) media.refresh(dashboard.playerPackage)
     }
     override fun onPause() {
