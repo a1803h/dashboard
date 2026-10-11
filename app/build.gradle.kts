@@ -10,8 +10,8 @@ android {
         applicationId = "tj.umed.drivedashboard"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.0.0-alpha4-figma"
+        versionCode = 5
+        versionName = "1.0.0-alpha5-figma-fix"
     }
     buildTypes {
         release { isMinifyEnabled = false }
