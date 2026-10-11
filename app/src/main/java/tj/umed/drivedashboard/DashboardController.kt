@@ -58,6 +58,7 @@ class DashboardController(val context: Context) {
     var pinnedApps by mutableStateOf(store.selectedPackages()); private set
     var playerPackage by mutableStateOf(store.musicPackage()); private set
     var brightness by mutableStateOf(store.brightness()); private set
+    var refreshRateHz by mutableStateOf(store.refreshRateHz()); private set
     var locationGranted by mutableStateOf(false); private set
     var gpsEnabled by mutableStateOf(false); private set
 
@@ -231,5 +232,28 @@ class DashboardController(val context: Context) {
     fun selectPlayerPackage(pkg: String) { playerPackage = pkg; store.setMusicPackage(pkg) }
     fun updateBrightness(value: Float) { brightness = value }
     fun saveBrightness() { store.saveBrightness(brightness) }
+    fun selectRefreshRate(hz: Int) {
+        refreshRateHz = hz.coerceAtLeast(0)
+        store.saveRefreshRateHz(refreshRateHz)
+    }
+
+    /**
+     * Force a fresh read of the LocationManager provider/permission state.
+     * A double tap never starts or resets Travel time; that stays tied to
+     * confirmed GPS movement. Safe when GPS was toggled in quick settings.
+     */
+    fun rescanGps(): String {
+        stop()
+        satellitesUsed = 0
+        gpsHasFix = false
+        gpsBars = 0
+        selector.reset()
+        start()
+        return when {
+            !locationGranted -> "Нет разрешения на GPS"
+            !gpsEnabled -> "GPS выключен — нажмите GPS сверху для настроек"
+            else -> "GPS включён — поиск спутников"
+        }
+    }
     private fun persistTrip() = store.saveTrip(targetKm, distanceKm, elapsedMs, tripStartEpochMs)
 }
