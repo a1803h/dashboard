@@ -34,8 +34,8 @@ class DisplayRefresh(private val context: Context) {
 
     fun apply(window: Window, requestedHz: Int): Boolean {
         val d = display()
-        val currentMode = d?.mode
-        val chosen = if (requestedHz > 0 && currentMode != null) {
+        val chosen = if (requestedHz > 0 && d != null) {
+            val currentMode = d.mode
             d.supportedModes
                 .filter { it.physicalWidth == currentMode.physicalWidth &&
                     it.physicalHeight == currentMode.physicalHeight }
