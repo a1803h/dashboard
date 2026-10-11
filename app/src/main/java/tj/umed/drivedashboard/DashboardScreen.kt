@@ -197,10 +197,10 @@ fun DashboardScreen(
                 SmallPill(
                     title = "Settings",
                     click = onSettings,
-                    textSize = spx(56f),
+                    textSize = spx(49f),
                     modifier = Modifier
-                        .offset(x = s(402.353f), y = s(2450.588f))
-                        .size(s(276.706f), s(97.412f))
+                        .offset(x = s(390f), y = s(2445f))
+                        .size(s(300f), s(106f))
                 )
             }
         }
@@ -313,9 +313,9 @@ private fun DestinationCluster(
                 size=Size(fill,h),cornerRadius=CornerRadius(kotlin.math.min(h/2f,fill/2f)))
         }
         Text("Distance traveled ${formatKm(controller.distanceKm)}",
-            modifier=Modifier.offset(x=s(0f),y=s(160.941f)),
+            modifier=Modifier.offset(x=s(0f),y=s(146.941f)),
             color=Color.White,fontSize=spx(31.888f),fontFamily=MiSansFamily,fontWeight=FontWeight.Normal)
-        Box(Modifier.offset(x=s(797f),y=s(160.941f)).width(s(200f)),
+        Box(Modifier.offset(x=s(797f),y=s(146.941f)).width(s(200f)),
             contentAlignment=Alignment.CenterEnd) {
             Text("Total ${if(controller.targetKm>0) formatKm(controller.targetKm) else "—"}",
                 modifier=Modifier.fillMaxWidth().basicMarquee(
@@ -324,10 +324,10 @@ private fun DestinationCluster(
                 color=Color.White,fontSize=spx(31.888f),lineHeight=spx(42f),
                 fontFamily=MiSansFamily,maxLines=1,softWrap=false,textAlign=TextAlign.End)
         }
-        SmallPill("Reset",onReset,spx(31.888f),
-            Modifier.offset(x=s(0f),y=s(220.235f)).size(s(207.529f),s(74.971f)))
-        SmallPill("Edit",onEdit,spx(31.888f),
-            Modifier.offset(x=s(791f),y=s(221.192f)).size(s(207.529f),s(73.059f)))
+        SmallPill("Reset",onReset,spx(35f),
+            Modifier.offset(x=s(0f),y=s(213.235f)).size(s(224f),s(81f)))
+        SmallPill("Edit",onEdit,spx(35f),
+            Modifier.offset(x=s(774.471f),y=s(214.192f)).size(s(224f),s(81f)))
     }
 }
 
@@ -457,7 +457,8 @@ private fun SmallPill(
             .clickable(onClick = click),
         contentAlignment = Alignment.Center
     ) {
-        Text(title, fontSize = textSize, color = Color(0xFFD0D0D0))
+        Text(title, fontSize = textSize, fontFamily = MiSansFamily, fontWeight = FontWeight.Normal,
+            color = Color.White, maxLines = 1, softWrap = false)
     }
 }
 
