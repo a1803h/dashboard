@@ -14,6 +14,11 @@ import kotlin.math.roundToInt
  * on a phone that does not advertise a 10 Hz display mode.
  */
 class DisplayRefresh(private val context: Context) {
+    companion object {
+        /** Auto 60: request 60 Hz while leaving physical mode selection to Android. */
+        const val ADAPTIVE_60 = -60
+    }
+
     private fun display(): Display? =
         (context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager)
             ?.getDisplay(Display.DEFAULT_DISPLAY)
@@ -33,6 +38,17 @@ class DisplayRefresh(private val context: Context) {
     }
 
     fun apply(window: Window, requestedHz: Int): Boolean {
+        // Unlike choosing a 60 Hz Display.Mode, leave modeId=0 so that the
+        // system compositor and LTPO panel remain free to adjust refresh.
+        // This is only a hint; HyperOS can ignore it or keep a constant 60 Hz.
+        if (requestedHz == ADAPTIVE_60) {
+            val attributes = window.attributes
+            attributes.preferredDisplayModeId = 0
+            attributes.preferredRefreshRate = 60f
+            window.attributes = attributes
+            return true
+        }
+
         val d = display()
         val chosen = if (requestedHz > 0 && d != null) {
             val currentMode = d.mode
