@@ -144,21 +144,7 @@ fun DashboardScreen(
                         .size(s(873.176f), s(611f))
                 )
 
-                if (!controller.locationGranted) {
-                    TextButton(
-                        onClick = onRequestGps,
-                        modifier = Modifier.offset(x = s(340f), y = s(690f))
-                    ) {
-                        Text("Разрешить доступ к GPS", color = blue, fontSize = spx(38f))
-                    }
-                } else if (!controller.gpsEnabled) {
-                    Text(
-                        text = "Включите GPS в настройках телефона",
-                        color = Color(0xFFFFCA3A),
-                        fontSize = spx(42f),
-                        modifier = Modifier.offset(x = s(230f), y = s(685f))
-                    )
-                }
+                
 
                 DestinationCluster(
                     controller = controller,
@@ -345,10 +331,12 @@ private fun FigmaMetric(label:String,value:String,scale:Float,modifier:Modifier=
     fun s(v:Float):Dp=(v*scale).dp
     fun f(v:Float)=(v*scale).sp
     Box(modifier){
-        Text(label,Modifier.fillMaxWidth().height(s(42f)),color=Color.White,
-            fontSize=f(31.888f),fontFamily=MiSansFamily,fontWeight=FontWeight.Normal,textAlign=align)
-        Text(value,Modifier.offset(y=s(40.235f)).fillMaxWidth().height(s(53f)),color=Color.White,
-            fontSize=f(40.012f),fontFamily=MiSansFamily,fontWeight=FontWeight.SemiBold,textAlign=align)
+        Text(label,Modifier.fillMaxWidth(),color=Color.White,
+            fontSize=f(31.888f),lineHeight=f(42f),maxLines=1,softWrap=false,
+            fontFamily=MiSansFamily,fontWeight=FontWeight.Normal,textAlign=align)
+        Text(value,Modifier.offset(y=s(40.235f)).fillMaxWidth(),color=Color.White,
+            fontSize=f(40.012f),lineHeight=f(53f),maxLines=1,softWrap=false,
+            fontFamily=MiSansFamily,fontWeight=FontWeight.SemiBold,textAlign=align)
     }
 }
 
@@ -362,7 +350,8 @@ private fun UtilitySliders(
     Box(modifier) {
         Box(Modifier.offset(x=s(0f),y=s(0f)).size(s(479.647f),s(42f)),contentAlignment=Alignment.Center) {
             Text("Brightness",fontSize=spx(31.423f),fontFamily=MiSansFamily,
-                fontWeight=FontWeight.Medium,color=Color.White)
+                fontWeight=FontWeight.Medium,color=Color.White,
+                lineHeight=spx(42f),maxLines=1,softWrap=false)
         }
         Box(Modifier.offset(x=s(517.765f),y=s(0f)).size(s(479.647f),s(42f)),contentAlignment=Alignment.Center) {
             Text("Volume",fontSize=spx(31.423f),fontFamily=MiSansFamily,
@@ -583,7 +572,13 @@ private fun MediaCard(
         Box(Modifier.offset(y=d(47.647f)).fillMaxWidth().height(d(64f)),
             contentAlignment=Alignment.Center) {
             Text(m.title,maxLines=1,color=Color.White,fontFamily=MiSansFamily,
-                fontWeight=FontWeight.SemiBold,fontSize=f(48.629f))
+                fontWeight=FontWeight.SemiBold,fontSize=f(48.629f),
+                modifier=Modifier.clickable(
+                    enabled = !media.hasNotificationAccess || hasSelectedPlayer
+                ) {
+                    if(!media.hasNotificationAccess) onMediaPermission()
+                    else onLaunchPlayer()
+                })
         }
         Box(Modifier.offset(y=d(110.117f)).fillMaxWidth().height(d(49f)),
             contentAlignment=Alignment.Center) {
@@ -626,16 +621,8 @@ private fun MediaCard(
             Box(Modifier.offset(x=d(500f)).size(d(146f),d(147f)).clickable(enabled=m.available) {media.skipNext()})
             Box(Modifier.offset(x=d(704f)).size(d(91f),d(147f)).clickable(enabled=m.available&&m.canRepeat) {media.repeat()})
         }
-        if(!media.hasNotificationAccess) {
-            TextButton(onClick=onMediaPermission,modifier=Modifier.align(Alignment.Center)) {
-                Text("Разрешить управление медиаплеером",color=blue,fontSize=f(31f))
-            }
-        } else if (!m.available) {
-            TextButton(onClick=onLaunchPlayer,modifier=Modifier.align(Alignment.Center),enabled=hasSelectedPlayer) {
-                Text(if(hasSelectedPlayer) "Открыть выбранный плеер" else "Нет активного медиаплеера",
-                    color=blue,fontSize=f(31f))
-            }
-        }
+        // The player launch/permission action lives on the song title.
+        // No extra action text obscures the Figma player progress and timestamps.
     }
 }
 
