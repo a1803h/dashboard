@@ -2,93 +2,104 @@ package tj.umed.drivedashboard
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private lateinit var dashboard: DashboardController
-    private lateinit var media: MediaBridge
-    private val requestLocation = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) dashboard.start()
+
+    private val locationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) dashboard.start() }
+
+    private val recognitionPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { dashboard.start() }
+
+    @Suppress("DEPRECATION")
+    private fun hideBars() {
+        window.decorView.systemUiVisibility =
+            (View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dashboard = DashboardController(this)
-        media = MediaBridge(this)
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = (android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
-            android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
+        hideBars()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setDeviceBrightness(dashboard.brightness)
-        val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+        applyBrightness(dashboard.brightness)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(), typography = MiSansTypography) {
-                var showSettings by remember { mutableStateOf(false) }
-                BackHandler(enabled = showSettings) { showSettings = false }
+                var settings by remember { mutableStateOf(false) }
+                BackHandler(enabled = settings) { settings = false }
                 LaunchedEffect(Unit) {
                     while (true) {
                         if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
                             dashboard.tick()
-                            media.refresh(dashboard.playerPackage)
+                            hideBars()
                         }
-                        delay(1000)
+                        delay(1000L)
                     }
                 }
-                if (showSettings) {
-                    SettingsScreen(
-                        controller = dashboard,
-                        onBack = { showSettings = false }
-                    )
+                if (settings) {
+                    SettingsScreen(controller = dashboard, onBack = { settings = false })
                 } else {
                     DashboardScreen(
                         controller = dashboard,
-                        media = media,
-                        audio = audio,
-                        onSettings = { showSettings = true },
-                        onRequestGps = { requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
-                        onMediaPermission = { startActivity(media.notificationPermissionIntent()) },
-                        onBrightness = { value ->
-                            dashboard.updateBrightness(value)
-                            setDeviceBrightness(value)
+                        onSettings = { settings = true },
+                        onRequestGps = { askForPermissions() },
+                        onBrightness = {
+                            dashboard.updateBrightness(it)
+                            applyBrightness(it)
                         },
-                        onOpenApp = { pkg ->
+                        onOpenApp = { packageName ->
                             runCatching {
-                                packageManager.getLaunchIntentForPackage(pkg)?.let(::startActivity)
+                                packageManager.getLaunchIntentForPackage(packageName)?.let(::startActivity)
                             }
                         }
                     )
                 }
             }
         }
+        askForPermissions()
+    }
+
+    private fun askForPermissions() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            requestLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        } else if (Build.VERSION.SDK_INT >= 29 &&
+            checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+            recognitionPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        } else {
+            dashboard.start()
         }
     }
-    private fun setDeviceBrightness(value: Float) {
-        val params = window.attributes
-        params.screenBrightness = value.coerceIn(0.02f, 1f) // Only this window; no WRITE_SETTINGS permission
-        window.attributes = params
+
+    private fun applyBrightness(value: Float) {
+        val attrs = window.attributes
+        attrs.screenBrightness = value.coerceIn(0.02f, 1f)
+        window.attributes = attrs
     }
+
     override fun onResume() {
         super.onResume()
+        hideBars()
         if (::dashboard.isInitialized) dashboard.start()
-        if (::media.isInitialized) media.refresh(dashboard.playerPackage)
     }
+
     override fun onPause() {
         if (::dashboard.isInitialized) dashboard.stop()
         super.onPause()

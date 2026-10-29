@@ -1,408 +1,311 @@
 package tj.umed.drivedashboard
 
-import android.media.AudioManager
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
-import androidx.core.content.res.ResourcesCompat
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
-import kotlin.math.roundToInt
 import java.util.Locale
+import kotlin.math.roundToInt
 
-private val pageBg = Color(0xFF050505)
-private val muted = Color(0xFF858585)
-private val edge = Color(0xFF252525)
-private val chipBg = Color(0xFF242424)
-private val green = Color(0xFF00ED25)
-private val blue = Color(0xFF63CBFF)
+private val background = Color.Black
+private val tileBackground = Color(0xFF151515)
+private val tileText = Color(0xFFD9D9D9)
+private val unitText = Color(0xFF818181)
+private val pills = Color(0xFF242424)
+
+/**
+ * The Figma frame is exactly 1440 x 3200 design units.
+ * Every element is positioned using proportional design coordinates, so its proportions
+ * remain the same on Android displays with other pixel densities.
+ */
+fun Modifier.frameAt(x: Number, y: Number, width: Number, height: Number, scale: Float): Modifier =
+    this.offset(x = (x.toFloat() * scale).dp, y = (y.toFloat() * scale).dp)
+        .size((width.toFloat() * scale).dp, (height.toFloat() * scale).dp)
+
+private fun amountKm(km: Double): String = when {
+    km <= 0.00001 -> "000"
+    km < 100.0 -> String.format(Locale.getDefault(), "%.1f", km)
+    else -> km.roundToInt().toString()
+}
+
+private fun countValue(value: Int): String = if (value == 0) "000" else value.toString()
+
+@Composable
+private fun Tile(
+    x: Int,
+    y: Int,
+    title: String,
+    value: String,
+    unit: String,
+    scale: Float,
+    touch: Modifier = Modifier
+) {
+    Box(
+        Modifier.frameAt(x, y, 621, 473.2, scale)
+            .clip(RoundedCornerShape((75.1f * scale).dp))
+            .background(tileBackground)
+            .then(touch)
+    ) {
+        Text(
+            title.uppercase(Locale.getDefault()),
+            Modifier.fillMaxWidth().offset(y = (45f * scale).dp),
+            color = tileText,
+            fontFamily = MiSansFamily, fontWeight = FontWeight.Medium,
+            fontSize = (36.92f * scale).sp, lineHeight = (52.5f * scale).sp,
+            textAlign = TextAlign.Center, maxLines = 1
+        )
+        val fontSize = when {
+            value.length <= 3 -> 261.6f
+            value.length == 4 -> 213f
+            value.length == 5 -> 175f
+            else -> 142f
+        }
+        Text(
+            value,
+            Modifier.fillMaxWidth().offset(y = (119f * scale).dp),
+            color = tileText, fontFamily = MiSansFamily, fontWeight = FontWeight.Normal,
+            fontSize = (fontSize * scale).sp, lineHeight = (295f * scale).sp,
+            textAlign = TextAlign.Center, maxLines = 1
+        )
+        Text(
+            unit.uppercase(Locale.getDefault()),
+            Modifier.fillMaxWidth().offset(y = (359f * scale).dp),
+            color = unitText, fontFamily = MiSansFamily, fontWeight = FontWeight.Bold,
+            fontSize = (36.92f * scale).sp, lineHeight = (54f * scale).sp,
+            textAlign = TextAlign.Center, maxLines = 1
+        )
+    }
+}
 
 @Composable
 fun DashboardScreen(
     controller: DashboardController,
-    media: MediaBridge,
-    audio: AudioManager,
     onSettings: () -> Unit,
     onRequestGps: () -> Unit,
-    onMediaPermission: () -> Unit,
     onBrightness: (Float) -> Unit,
     onOpenApp: (String) -> Unit
 ) {
-    var editRoute by remember { mutableStateOf(false) }
-    var askReset by remember { mutableStateOf(false) }
-    val remaining = (controller.targetKm - controller.distanceKm).coerceAtLeast(0.0)
-    val maxVolume = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
-    var volume by remember { mutableFloatStateOf(audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
-    Column(
-        Modifier.fillMaxSize().background(pageBg).verticalScroll(rememberScrollState())
-            .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 25.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Row(Modifier.clickable { onRequestGps() }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("GPS", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                Spacer(Modifier.width(6.dp))
-                listOf(Color(0xFFFF322C),Color(0xFFFF9D13),Color.Yellow,Color(0xFF9AFF00),Color.Green).forEachIndexed { i, c ->
-                    Box(Modifier.padding(end = 3.dp).size(8.dp).border(1.dp, if (controller.gpsBars > i) c else Color(0xFF474747), CircleShape)
-                        .background(if (controller.gpsBars > i) c else Color.Transparent, CircleShape))
-                }
-            }
-            Text(controller.clock, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        }
-        Box(Modifier.fillMaxWidth().height(183.dp)) {
-            Text(if (controller.gpsHasFix) "${controller.currentRpm}" else "—",
-                Modifier.align(Alignment.TopCenter).padding(top=8.dp), color = muted, fontSize = 17.sp)
-            Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
-                Text("${controller.avgSpeedKmh.roundToInt()}", color = blue, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-            }
-            OutlineSpeed(controller.speedKmh.roundToInt().toString(), speedTint(controller.speedKmh), controller.speedKmh,
-                Modifier.fillMaxWidth(.75f).align(Alignment.Center).height(140.dp))
-            Text(controller.currentGear?.number?.toString() ?: "—",
-                Modifier.align(Alignment.CenterEnd), color = Color(0xFF707070), fontSize = 43.sp, fontWeight = FontWeight.Light)
-        }
-        if (!controller.locationGranted) {
-            TextButton(onClick = onRequestGps) { Text("Разрешить доступ к GPS", color = blue, fontSize = 12.sp) }
-        } else if (!controller.gpsEnabled) {
-            Text("Включите GPS в настройках телефона", color = Color(0xFFFFCA3A), fontSize = 12.sp)
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-            TripMetric("Remaining", if (controller.targetKm > 0) formatKm(remaining) else "—", Alignment.Start)
-            TripMetric("Travel time", formatMinutes(controller.elapsedMs), Alignment.CenterHorizontally)
-            TripMetric("Arrival In", controller.arrivalMinutes?.let { "$it min" } ?: "—", Alignment.End)
-        }
-        Spacer(Modifier.height(9.dp))
-        LinearProgressIndicator(
-            progress = { if (controller.targetKm > 0) (controller.distanceKm / controller.targetKm).toFloat().coerceIn(0f,1f) else 0f },
-            modifier = Modifier.fillMaxWidth().height(9.dp).clip(RoundedCornerShape(10.dp)),
-            color = green, trackColor = edge
-        )
-        Spacer(Modifier.height(5.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Distance traveled ${formatKm(controller.distanceKm)}", color=Color.LightGray,fontSize=10.sp)
-            Text("Total ${if(controller.targetKm > 0) formatKm(controller.targetKm) else "—"}",color=Color.LightGray,fontSize=10.sp)
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            SmallPill("Reset") { askReset = true }
-            SmallPill("Edit") { editRoute = true }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f), horizontalAlignment=Alignment.CenterHorizontally) {
-                Text("Brightness",fontSize=11.sp,color=Color.White)
-                CompactSlider(value=controller.brightness,onValueChange=onBrightness,onFinish=controller::saveBrightness)
-            }
-            Column(Modifier.weight(1f), horizontalAlignment=Alignment.CenterHorizontally) {
-                Text("Volume",fontSize=11.sp,color=Color.White)
-                CompactSlider(value=volume,onValueChange={
-                    volume=it
-                    audio.setStreamVolume(AudioManager.STREAM_MUSIC,(it*maxVolume).roundToInt(),0)
-                })
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        MediaCard(media = media, onMediaPermission = onMediaPermission,
-            onLaunchPlayer = { if (controller.playerPackage.isNotBlank()) onOpenApp(controller.playerPackage) },
-            hasSelectedPlayer = controller.playerPackage.isNotBlank())
-        Spacer(Modifier.height(18.dp))
-        PinnedAppGrid(controller.pinnedApps, onOpenApp)
-        Spacer(Modifier.height(25.dp))
-        SmallPill("Settings",onSettings)
-    }
-    if (editRoute) RouteDialog(controller.targetKm, onDismiss={editRoute=false}, onSave={controller.setTarget(it);editRoute=false})
-    if (askReset) AlertDialog(onDismissRequest={askReset=false}, title={Text("Сброс поездки")},
-        text={Text("Обнулить пройденное расстояние и время? Общая дистанция останется.")},
-        confirmButton={TextButton(onClick={controller.resetTrip();askReset=false}){Text("Сбросить")}},
-        dismissButton={TextButton(onClick={askReset=false}){Text("Отмена")}})
-}
-
-private fun speedTint(kmh: Double) = when {
-    kmh >= 90.0 -> Color(0xFFFF1818)
-    kmh >= 80.0 -> Color(0xFFFFDA00)
-    kmh > 60.0 -> Color(0xFF00FA16)
-    else -> Color.White
-}
-
-@Composable
-private fun OutlineSpeed(value: String, tint: Color, kmh: Double, modifier: Modifier = Modifier) {
+    var editDistance by remember { mutableStateOf(false) }
+    var distanceInput by remember { mutableStateOf("") }
     val context = LocalContext.current
-    val heavyTypeface = remember(context) {
-        ResourcesCompat.getFont(context, R.font.misans_latin_heavy)
-            ?: android.graphics.Typeface.DEFAULT_BOLD
-    }
-    Canvas(modifier) {
-        val progress = (kmh / 120.0).toFloat().coerceIn(0f, 1f)
-        val strokePx = (3.1f + 2.4f * progress) * density
-        val glow = ((kmh - 60.0) / 60.0).toFloat().coerceIn(0f, 1f)
-        val typeface = heavyTypeface
-        val mainPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = tint.toArgb()
-            style = android.graphics.Paint.Style.STROKE
-            strokeJoin = android.graphics.Paint.Join.ROUND
-            strokeCap = android.graphics.Paint.Cap.ROUND
-            strokeWidth = strokePx
-            this.typeface = typeface
-            textAlign = android.graphics.Paint.Align.CENTER
-            textSize = size.height * if (value.length >= 3) 0.79f else 1.02f
-        }
-        val baseline = (size.height - mainPaint.ascent() - mainPaint.descent()) / 2f
-        val availableWidth = (size.width - strokePx * 5f).coerceAtLeast(1f)
-        val scaleX = (availableWidth / mainPaint.measureText(value).coerceAtLeast(1f))
-            .coerceAtMost(1f)
-        drawIntoCanvas { canvas ->
-            val native = canvas.nativeCanvas
-            native.save()
-            native.scale(scaleX, 1f, size.width / 2f, baseline)
-            if (glow > 0f) {
-                for (layer in 3 downTo 1) {
-                    val halo = android.graphics.Paint(mainPaint).apply {
-                        color = tint.copy(alpha = glow * (0.04f + (4 - layer) * 0.025f)).toArgb()
-                        strokeWidth = strokePx + (layer * 5f + 3f) * density
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(background)) {
+        val scale = maxWidth.value / 1440f
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Box(Modifier.fillMaxWidth().height((3200f * scale).dp).background(background)) {
+                Text(
+                    controller.clock,
+                    Modifier.frameAt(524, 105, 392, 183, scale),
+                    color = Color.White, textAlign = TextAlign.Center,
+                    fontFamily = MiSansFamily, fontWeight = FontWeight.SemiBold,
+                    fontSize = (137.7f * scale).sp,
+                    lineHeight = (183f * scale).sp,
+                    maxLines = 1
+                )
+
+                Row(
+                    Modifier.frameAt(162, 182, 201, 29, scale)
+                        .clickable { onRequestGps() },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    val colors = listOf(Color(0xFFFF2734), Color(0xFFFF9F00),
+                        Color(0xFFFFCC00), Color(0xFF8EFF00), Color(0xFF00EF30))
+                    colors.forEachIndexed { index, color ->
+                        Box(Modifier.size((28.59f * scale).dp).clip(CircleShape)
+                            .background(if (controller.gpsBars > index) color else Color(0xFF343434)))
                     }
-                    native.drawText(value, size.width / 2f, baseline, halo)
                 }
-            }
-            native.drawText(value, size.width / 2f, baseline, mainPaint)
-            native.restore()
-        }
-    }
-}
 
-@Composable
-private fun TripMetric(label:String, value:String, alignment: Alignment.Horizontal) {
-    Column(horizontalAlignment=alignment) {
-        Text(label, color=Color.LightGray,fontSize=10.sp)
-        Text(value,color=Color.White,fontSize=13.sp,fontWeight=FontWeight.SemiBold)
-    }
-}
+                // Native battery indicator, sized and aligned to the Figma battery group.
+                Box(
+                    Modifier.frameAt(1093, 175, 71, 40.53, scale)
+                        .border((2.6f * scale).dp, Color.White, RoundedCornerShape((7.6f * scale).dp))
+                        .padding((5.05f * scale).dp)
+                ) {
+                    Box(
+                        Modifier.fillMaxHeight()
+                            .fillMaxWidth((controller.batteryPercent / 100f).coerceIn(0f, 1f))
+                            .clip(RoundedCornerShape((2.5f * scale).dp))
+                            .background(Color.White)
+                    )
+                }
+                Box(Modifier.frameAt(1166.5, 187.7, 2.53, 15.2, scale).background(Color.White))
+                Text(
+                    controller.batteryPercent.toString() + "%",
+                    Modifier.frameAt(1184, 170, 120, 52, scale),
+                    color = Color.White, fontFamily = MiSansFamily,
+                    fontWeight = FontWeight.Normal, fontSize = (39.5f * scale).sp,
+                    lineHeight = (52f * scale).sp
+                )
 
-@Composable
-private fun SmallPill(title:String, click:()->Unit) {
-    Box(Modifier.clip(CircleShape).background(chipBg).clickable(onClick=click)
-        .defaultMinSize(minWidth=68.dp,minHeight=30.dp).padding(horizontal=13.dp,vertical=6.dp),contentAlignment=Alignment.Center) {
-        Text(title,fontSize=12.sp,color=Color.LightGray)
-    }
-}
+                Tile(64, 343, "Осталось", amountKm(controller.remainingKm), "км", scale)
+                Tile(755, 343, "Пройдено", amountKm(controller.distanceKm), "км", scale)
+                Tile(64, 886, "Прибытие", controller.arrivalMinutes?.let(::countValue) ?: "—", "мин", scale)
+                Tile(755, 886, "Прошло", countValue((controller.elapsedMs / 60000L).toInt()), "мин", scale)
 
-/** Capsule-shaped custom slider matching the Figma controls, without a thumb. */
-@Composable
-private fun CompactSlider(value: Float, onValueChange: (Float) -> Unit, onFinish: () -> Unit = {}) {
-    Canvas(
-        Modifier.fillMaxWidth().height(38.dp)
-            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(0f,1f),0f..1f) }
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    fun update(x: Float) {
-                        onValueChange((x / size.width.coerceAtLeast(1)).coerceIn(0f,1f))
+                Tile(
+                    64, 1429, "Скорость", countValue(controller.speedKmh.roundToInt()), "км/ч", scale,
+                    Modifier.pointerInput(controller) {
+                        detectTapGestures(
+                            onDoubleTap = { controller.toggleManualPause() },
+                            onLongPress = { controller.useAutomaticMode() }
+                        )
                     }
-                    update(down.position.x)
-                    var pressed = true
-                    while (pressed) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id }
-                        if (change != null) {
-                            update(change.position.x)
-                            change.consume()
+                )
+                Tile(
+                    755, 1429, "Расстояние", amountKm(controller.targetKm), "км", scale,
+                    Modifier.clickable {
+                        distanceInput = if (controller.targetKm > 0) controller.targetKm.toString() else ""
+                        editDistance = true
+                    }
+                )
+
+                Text(
+                    "ЯРКОСТЬ",
+                    Modifier.frameAt(64, 1976, 1312, 54, scale),
+                    fontSize = (37.97f * scale).sp,
+                    lineHeight = (54f * scale).sp, color = tileText,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium, fontFamily = MiSansFamily
+                )
+                Box(
+                    Modifier.frameAt(64, 2046.59, 1312, 170.4, scale)
+                        .clip(RoundedCornerShape((143f * scale).dp))
+                        .background(Color.Black)
+                        .border(
+                            (14.48f * scale).dp,
+                            Color(0xFF212121),
+                            RoundedCornerShape((143f * scale).dp)
+                        )
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = {
+                                onBrightness((it.x / size.width).coerceIn(0.02f, 1f))
+                                controller.saveBrightness()
+                            })
                         }
-                        pressed = change?.pressed == true
-                    }
-                    onFinish()
-                }
-            }
-    ) {
-        val h = 29.dp.toPx()
-        val y = (size.height - h) / 2f
-        val corner = h / 2f
-        drawRoundRect(
-            color = Color(0xFF292929),
-            topLeft = Offset(0f,y),
-            size = androidx.compose.ui.geometry.Size(size.width,h),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(corner),
-            style = Stroke(width = 1.8.dp.toPx())
-        )
-        val filled = size.width * value.coerceIn(0f,1f)
-        if(filled > 0.5f) {
-            drawRoundRect(
-                color = Color(0xFFBDBDBD),
-                topLeft = Offset(0f,y),
-                size = androidx.compose.ui.geometry.Size(filled,h),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(kotlin.math.min(corner,filled/2f),corner)
-            )
-        }
-    }
-}
-
-/** Music scrubber: narrow rounded progress line without a Material thumb. */
-@Composable
-private fun PlaybackProgress(progress: Float, enabled: Boolean, onChange: (Float) -> Unit) {
-    Canvas(Modifier.fillMaxWidth().height(22.dp)
-        .pointerInput(enabled) {
-            if (enabled) awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                fun update(x: Float) { onChange((x / size.width.coerceAtLeast(1)).coerceIn(0f,1f)) }
-                update(down.position.x)
-                var pressed = true
-                while (pressed) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull { it.id == down.id }
-                    if(change != null) { update(change.position.x); change.consume() }
-                    pressed = change?.pressed == true
-                }
-            }
-        }
-    ) {
-        val h = 9.dp.toPx()
-        val y = (size.height - h) / 2f
-        val radius = h / 2f
-        drawRoundRect(Color(0xFF333333), Offset(0f,y),
-            androidx.compose.ui.geometry.Size(size.width,h),
-            androidx.compose.ui.geometry.CornerRadius(radius))
-        drawRoundRect(Color(0xFF777777), Offset(0f,y),
-            androidx.compose.ui.geometry.Size(size.width,h),
-            androidx.compose.ui.geometry.CornerRadius(radius),
-            style = Stroke(width = 1.dp.toPx()))
-        val filled = size.width * progress.coerceIn(0f,1f)
-        if (filled > 0.5f) drawRoundRect(Color(0xFFBDBDBD), Offset(0f,y),
-            androidx.compose.ui.geometry.Size(filled,h),
-            androidx.compose.ui.geometry.CornerRadius(kotlin.math.min(radius,filled/2f),radius))
-    }
-}
-
-@Composable
-private fun MediaCard(media: MediaBridge,onMediaPermission:()->Unit,
-    onLaunchPlayer:()->Unit,hasSelectedPlayer:Boolean) {
-    val m=media.state
-    Column(Modifier.fillMaxWidth().border(1.25.dp, edge, RoundedCornerShape(17.dp))
-        .padding(horizontal=12.dp,vertical=11.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-        Text(m.title,maxLines=1,color=Color.White,fontWeight=FontWeight.SemiBold,fontSize=15.sp)
-        Text(m.artist,maxLines=1,color=muted,fontSize=12.sp)
-        Spacer(Modifier.height(7.dp))
-        PlaybackProgress(
-            progress = if (m.durationMs > 0) (m.positionMs.toFloat()/m.durationMs).coerceIn(0f,1f) else 0f,
-            enabled = m.available && m.durationMs > 0,
-            onChange = { media.seek(it) }
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) {
-            Text(timeForMs(m.positionMs),color=muted,fontSize=9.sp)
-            Text(timeForMs(m.durationMs),color=muted,fontSize=9.sp)
-        }
-        Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceEvenly) {
-            IconButton(onClick={media.shuffle()},enabled=m.available&&m.canShuffle,modifier=Modifier.size(36.dp)) {
-                Icon(Icons.Default.Shuffle,"Shuffle",tint=if(m.available&&m.canShuffle) Color.LightGray else Color.DarkGray)
-            }
-            IconButton(onClick={media.skipPrev()},enabled=m.available,modifier=Modifier.size(38.dp)) {
-                Icon(Icons.Default.SkipPrevious,"Previous",tint=Color.White)
-            }
-            IconButton(onClick={media.playPause()},enabled=m.available,modifier=Modifier.size(48.dp)) {
-                Icon(if(m.playing) Icons.Default.Pause else Icons.Default.PlayArrow,"Play/Pause",tint=Color.White,modifier=Modifier.size(44.dp))
-            }
-            IconButton(onClick={media.skipNext()},enabled=m.available,modifier=Modifier.size(38.dp)) {
-                Icon(Icons.Default.SkipNext,"Next",tint=Color.White)
-            }
-            IconButton(onClick={media.repeat()},enabled=m.available&&m.canRepeat,modifier=Modifier.size(36.dp)) {
-                Icon(Icons.Default.Repeat,"Repeat",tint=if(m.available&&m.canRepeat) Color.LightGray else Color.DarkGray)
-            }
-        }
-        if (!media.hasNotificationAccess) {
-            TextButton(onClick=onMediaPermission) {
-                Text("Разрешить управление медиаплеером",color=blue,fontSize=11.sp)
-            }
-        } else if (!m.available) {
-            if (hasSelectedPlayer) {
-                TextButton(onClick=onLaunchPlayer) {
-                    Text("Открыть выбранный плеер",color=blue,fontSize=11.sp)
-                }
-            } else Text("Нет активного медиаплеера",fontSize=10.sp,color=muted)
-        }
-    }
-}
-
-@Composable
-private fun PinnedAppGrid(packages: List<String>, onOpenApp: (String) -> Unit) {
-    val context = LocalContext.current
-    if (packages.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        for (row in 0..1) {
-            if (row * 4 >= packages.size) break
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                for (column in 0..3) {
-                    val pkg = packages.getOrNull(row * 4 + column)
-                    Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) {
-                        if (pkg != null) {
-                            val image = remember(pkg) {
-                                runCatching {
-                                    context.packageManager.getApplicationIcon(pkg)
-                                        .toBitmap(144, 144).asImageBitmap()
-                                }.getOrNull()
-                            }
-                            if (image != null) {
-                                val label = remember(pkg) {
-                                    runCatching {
-                                        context.packageManager.getApplicationLabel(
-                                            context.packageManager.getApplicationInfo(pkg, 0)
-                                        ).toString()
-                                    }.getOrDefault(pkg)
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragEnd = { controller.saveBrightness() },
+                                onDrag = { change, _ ->
+                                    onBrightness((change.position.x / size.width).coerceIn(0.02f, 1f))
+                                    change.consume()
                                 }
-                                Image(
-                                    bitmap = image,
-                                    contentDescription = label,
-                                    modifier = Modifier.fillMaxSize().clickable { onOpenApp(pkg) }
-                                )
-                            }
+                            )
+                        }
+                ) {
+                    Box(
+                        Modifier.fillMaxHeight()
+                            .fillMaxWidth(controller.brightness)
+                            .clip(RoundedCornerShape((143f * scale).dp))
+                            .background(Color(0xFFBABABA))
+                    )
+                }
+
+                // Eight true launcher icons: the colored boxes in the Figma file are placeholders.
+                controller.pinnedApps.take(8).forEachIndexed { index, pkg ->
+                    val column = index % 4
+                    val row = index / 4
+                    val bitmap = remember(pkg) {
+                        runCatching {
+                            context.packageManager.getApplicationIcon(pkg)
+                                .toBitmap(256, 256).asImageBitmap()
+                        }.getOrNull()
+                    }
+                    Box(
+                        Modifier.frameAt(64 + column * 352, 2320.61 + row * 328.348, 256, 256, scale)
+                            .clip(RoundedCornerShape((61.217f * scale).dp))
+                            .clickable { onOpenApp(pkg) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (bitmap != null) {
+                            Image(bitmap, contentDescription = pkg, modifier = Modifier.fillMaxSize())
                         }
                     }
+                }
+
+                Box(
+                    Modifier.frameAt(495.59, 3008, 448.4, 128, scale)
+                        .clip(RoundedCornerShape((64f * scale).dp))
+                        .background(pills)
+                        .clickable(onClick = onSettings),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "НАСТРОЙКИ",
+                        color = Color.White, fontFamily = MiSansFamily,
+                        fontWeight = FontWeight.Normal, fontSize = (55.87f * scale).sp,
+                        maxLines = 1, textAlign = TextAlign.Center
+                    )
                 }
             }
         }
     }
-}
 
-@Composable
-private fun RouteDialog(current:Double,onDismiss:()->Unit,onSave:(Double)->Unit) {
-    var text by remember { mutableStateOf(if(current>0) current.toString() else "") }
-    val number=text.replace(',','.').toDoubleOrNull()
-    AlertDialog(onDismissRequest=onDismiss,title={Text("Общая дистанция")},
-        text={Column { Text("Укажи длину поездки в километрах.",fontSize=13.sp)
-            Spacer(Modifier.height(9.dp))
-            OutlinedTextField(value=text,onValueChange={text=it},label={Text("Км")},singleLine=true)
-        }},confirmButton={TextButton(enabled=number!=null&&number>=0&&number<=50000,onClick={onSave(number!!)}){Text("Сохранить")}},
-        dismissButton={TextButton(onClick=onDismiss){Text("Отмена")}})
+    if (editDistance) {
+        AlertDialog(
+            onDismissRequest = { editDistance = false },
+            title = { Text("Расстояние до конечного пункта") },
+            text = {
+                Column {
+                    Text("Введите общую дистанцию в километрах. Изменение начинает новую поездку.")
+                    Spacer(Modifier.height(12.dp))
+                    BasicTextField(
+                        value = distanceInput,
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() || it == '.' || it == ',' } && input.length <= 8) {
+                                distanceInput = input
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = TextStyle(color = Color.White, fontSize = 22.sp, fontFamily = MiSansFamily),
+                        cursorBrush = SolidColor(Color.White),
+                        modifier = Modifier.fillMaxWidth()
+                            .background(Color(0xFF242424), RoundedCornerShape(12.dp))
+                            .padding(15.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    distanceInput.replace(',', '.').toDoubleOrNull()?.let {
+                        controller.setTarget(it)
+                        editDistance = false
+                    }
+                }) { Text("Сохранить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editDistance = false }) { Text("Отмена") }
+            }
+        )
+    }
 }
-
-private fun formatKm(n:Double):String = String.format(Locale.US,"%.1f km",n.coerceAtLeast(0.0))
-private fun formatMinutes(ms:Long):String = "${ms / 60000L} min"
-private fun timeForMs(ms:Long):String = "%02d:%02d".format(Locale.US,ms.coerceAtLeast(0)/60000,(ms.coerceAtLeast(0)/1000)%60)
