@@ -10,8 +10,8 @@ android {
         applicationId = "tj.umed.drivedashboard"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.2.1-alpha1"
+        versionCode = 7
+        versionName = "1.2.2-alpha1"
     }
     buildTypes {
         release { isMinifyEnabled = false }

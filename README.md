@@ -1,4 +1,10 @@
-# Drive Dashboard 1.2.1-alpha1
+# Drive Dashboard 1.2.2-alpha1
+
+## Update 1.2.2
+- Slightly reduced the home-screen "НАСТРОЙКИ" label from 55.87 to 49.5 design-scaled sp, preserving the original button.
+- Added a read-only gesture guide in Settings below application selection: speed double tap/long press, traveled distance long press and destination distance single tap.
+- No changes to trip recording logic, layout geometry of the dashboard or other controls.
+
 
 ## Update 1.2.1
 - Three-character maximum numeric values on all six tiles: 9.5, 10, 125. Whole numbers have no .0; 1000+ is displayed as 999 due to the 3-character limit (underlying reading is retained).

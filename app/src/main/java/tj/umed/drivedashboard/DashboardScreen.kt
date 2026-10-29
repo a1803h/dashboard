@@ -274,7 +274,7 @@ fun DashboardScreen(
                     Text(
                         "НАСТРОЙКИ",
                         color = Color.White, fontFamily = MiSansFamily,
-                        fontWeight = FontWeight.Normal, fontSize = (55.87f * scale).sp,
+                        fontWeight = FontWeight.Normal, fontSize = (49.5f * scale).sp,
                         maxLines = 1, textAlign = TextAlign.Center
                     )
                 }

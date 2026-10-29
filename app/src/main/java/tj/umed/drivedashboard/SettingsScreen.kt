@@ -74,6 +74,58 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
                 )
                 SettingsPill("Выбрать", 63f, 622.38f, 363.19f, 130.62f, s) { selecting = true }
                 SettingsPill("Сортировать", 473.74f, 622.93f, 493.58f, 129.52f, s) { sorting = true }
+
+                // Read-only gesture reference, below the existing app settings.
+                Column(
+                    Modifier.frameAt(63.45, 940, 1313, 1350, s),
+                    verticalArrangement = Arrangement.spacedBy((58f * s).dp)
+                ) {
+                    Text(
+                        "Управление плитками",
+                        color = Color.White, fontSize = (78f * s).sp,
+                        lineHeight = (98f * s).sp,
+                        fontFamily = MiSansFamily, fontWeight = FontWeight.Normal
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy((17f * s).dp)) {
+                        Text(
+                            "СКОРОСТЬ",
+                            color = Color(0xFFD9D9D9), fontFamily = MiSansFamily,
+                            fontSize = (48f * s).sp, fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Двойное нажатие — принудительная пауза или продолжение поездки. " +
+                                "Долгое нажатие — возврат к автоматическому определению движения.",
+                            color = Color(0xFF999999), fontFamily = MiSansFamily,
+                            fontSize = (43f * s).sp, lineHeight = (64f * s).sp
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy((17f * s).dp)) {
+                        Text(
+                            "ПРОЙДЕНО",
+                            color = Color(0xFFD9D9D9), fontFamily = MiSansFamily,
+                            fontSize = (48f * s).sp, fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Долгое нажатие — сброс пройденных километров и времени поездки. " +
+                                "Заданное расстояние до пункта назначения сохраняется.",
+                            color = Color(0xFF999999), fontFamily = MiSansFamily,
+                            fontSize = (43f * s).sp, lineHeight = (64f * s).sp
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy((17f * s).dp)) {
+                        Text(
+                            "РАССТОЯНИЕ",
+                            color = Color(0xFFD9D9D9), fontFamily = MiSansFamily,
+                            fontSize = (48f * s).sp, fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Одно нажатие — ввод или изменение расстояния до конечного пункта. " +
+                                "Без заданного расстояния скорость, пройденный путь и время продолжают работать.",
+                            color = Color(0xFF999999), fontFamily = MiSansFamily,
+                            fontSize = (43f * s).sp, lineHeight = (64f * s).sp
+                        )
+                    }
+                }
             }
         }
     }
