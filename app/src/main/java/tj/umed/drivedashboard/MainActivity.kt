@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private lateinit var dashboard: DashboardController
+    private lateinit var adaptiveDisplay: AdaptiveDisplay
 
     private val locationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dashboard = DashboardController(this)
+        adaptiveDisplay = AdaptiveDisplay(this)
         hideBars()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         applyBrightness(dashboard.brightness)
@@ -49,7 +51,6 @@ class MainActivity : ComponentActivity() {
                     while (true) {
                         if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
                             dashboard.tick()
-                            hideBars()
                         }
                         delay(1000L)
                     }
@@ -97,11 +98,18 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         hideBars()
+        if (::adaptiveDisplay.isInitialized) adaptiveDisplay.start()
         if (::dashboard.isInitialized) dashboard.start()
     }
 
     override fun onPause() {
         if (::dashboard.isInitialized) dashboard.stop()
+        if (::adaptiveDisplay.isInitialized) adaptiveDisplay.restore()
         super.onPause()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideBars()
     }
 }

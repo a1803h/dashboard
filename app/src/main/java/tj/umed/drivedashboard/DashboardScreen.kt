@@ -76,7 +76,7 @@ private fun Tile(
     ) {
         Text(
             title.uppercase(Locale.getDefault()),
-            Modifier.fillMaxWidth().offset(y = (45f * scale).dp),
+            Modifier.fillMaxWidth().offset(y = (45.38f * scale).dp),
             color = tileText,
             fontFamily = MiSansFamily, fontWeight = FontWeight.Medium,
             fontSize = (36.92f * scale).sp, lineHeight = (52.5f * scale).sp,
@@ -90,14 +90,14 @@ private fun Tile(
         }
         Text(
             value,
-            Modifier.fillMaxWidth().offset(y = (119f * scale).dp),
+            Modifier.fillMaxWidth().offset(y = (51.06f * scale).dp),
             color = tileText, fontFamily = MiSansFamily, fontWeight = FontWeight.Normal,
             fontSize = (fontSize * scale).sp, lineHeight = (295f * scale).sp,
             textAlign = TextAlign.Center, maxLines = 1
         )
         Text(
             unit.uppercase(Locale.getDefault()),
-            Modifier.fillMaxWidth().offset(y = (359f * scale).dp),
+            Modifier.fillMaxWidth().offset(y = (361.99f * scale).dp),
             color = unitText, fontFamily = MiSansFamily, fontWeight = FontWeight.Bold,
             fontSize = (36.92f * scale).sp, lineHeight = (54f * scale).sp,
             textAlign = TextAlign.Center, maxLines = 1
@@ -168,7 +168,12 @@ fun DashboardScreen(
                 )
 
                 Tile(64, 343, "Осталось", amountKm(controller.remainingKm), "км", scale)
-                Tile(755, 343, "Пройдено", amountKm(controller.distanceKm), "км", scale)
+                Tile(
+                    755, 343, "Пройдено", amountKm(controller.distanceKm), "км", scale,
+                    Modifier.pointerInput(controller) {
+                        detectTapGestures(onLongPress = { controller.resetTripKeepingTarget() })
+                    }
+                )
                 Tile(64, 886, "Прибытие", controller.arrivalMinutes?.let(::countValue) ?: "—", "мин", scale)
                 Tile(755, 886, "Прошло", countValue((controller.elapsedMs / 60000L).toInt()), "мин", scale)
 

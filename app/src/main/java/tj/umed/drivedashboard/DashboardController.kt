@@ -55,6 +55,8 @@ class DashboardController(val context: Context) {
     private var lastFixAt = 0L
     private var lastClockAt = SystemClock.elapsedRealtime()
     private var lastSavedAt = 0L
+    private var lastBatteryReadAt = 0L
+    private var accurateElapsedMs = store.travelMs()
     private var manualOverride: Boolean? = null
 
     var speedKmh by mutableStateOf(0.0); private set
@@ -140,7 +142,7 @@ class DashboardController(val context: Context) {
             return
         }
         try {
-            locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 750L, 0f, listener, Looper.getMainLooper())
+            locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1500L, 1f, listener, Looper.getMainLooper())
             locations.registerGnssStatusCallback(satellites, handler)
             tracking = true
             startRecognition()
@@ -183,15 +185,19 @@ class DashboardController(val context: Context) {
 
     private fun advanceClock(now: Long) {
         if (isRecording && now > lastClockAt) {
-            elapsedMs += (now - lastClockAt).coerceAtMost(10000L)
+            accurateElapsedMs += (now - lastClockAt).coerceAtMost(10000L)
         }
         lastClockAt = now
+        // The visible "ПРОШЛО" tile changes by minutes, not every second.
+        val visibleMinutes = (accurateElapsedMs / 60000L) * 60000L
+        if (elapsedMs != visibleMinutes) elapsedMs = visibleMinutes
     }
 
     private fun refreshRecording() {
         movement = detector.movement
         manualControl = manualOverride != null
-        isRecording = targetKm > 0.0 && remainingKm > 0.0 &&
+        // A target distance is optional: driving, speed and elapsed time work without it.
+        isRecording = (targetKm <= 0.0 || remainingKm > 0.0) &&
             (manualOverride ?: (movement == Movement.DRIVING))
         updateCalculated()
     }
@@ -229,10 +235,14 @@ class DashboardController(val context: Context) {
     fun tick() {
         val now = SystemClock.elapsedRealtime()
         clock = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
-        val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = battery?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
-        if (level >= 0 && scale > 0) batteryPercent = (level * 100 / scale).coerceIn(0, 100)
+        // Battery broadcasts need reading only once a minute; clock text changes only on minute rollover.
+        if (lastBatteryReadAt == 0L || now - lastBatteryReadAt >= 60_000L) {
+            val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = battery?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
+            if (level >= 0 && scale > 0) batteryPercent = (level * 100 / scale).coerceIn(0, 100)
+            lastBatteryReadAt = now
+        }
         advanceClock(now)
         if (gpsHasFix && now - lastFixAt > 5500) {
             gpsHasFix = false
@@ -248,8 +258,8 @@ class DashboardController(val context: Context) {
     }
 
     private fun updateCalculated() {
-        avgSpeedKmh = if (elapsedMs > 1000L && distanceKm > 0.0)
-            distanceKm * 3_600_000.0 / elapsedMs else 0.0
+        avgSpeedKmh = if (accurateElapsedMs > 1000L && distanceKm > 0.0)
+            distanceKm * 3_600_000.0 / accurateElapsedMs else 0.0
         arrivalMinutes = when {
             targetKm <= 0 -> null
             remainingKm <= 0 -> 0
@@ -261,14 +271,33 @@ class DashboardController(val context: Context) {
     fun setTarget(km: Double) {
         val validated = km.coerceIn(0.0, 99999.0)
         if (validated == targetKm) return
-        // Entering a new destination creates a fresh journey.
+        // Setting the first destination during an already active untargeted drive
+        // preserves driven kilometers and minutes; replacing a destination starts anew.
+        val hadTarget = targetKm > 0.0
+        if (hadTarget) {
+            distanceKm = 0.0
+            accurateElapsedMs = 0L
+            elapsedMs = 0L
+            manualOverride = null
+            previousFix = null
+        }
         targetKm = validated
-        distanceKm = 0.0
-        elapsedMs = 0L
-        manualOverride = null
-        detector.reset()
-        previousFix = null
         lastClockAt = SystemClock.elapsedRealtime()
+        refreshRecording()
+        persistTrip()
+    }
+
+    /** Reset tracked distance/time/ETA without clearing destination distance. */
+    fun resetTripKeepingTarget() {
+        val now = SystemClock.elapsedRealtime()
+        distanceKm = 0.0
+        accurateElapsedMs = 0L
+        elapsedMs = 0L
+        avgSpeedKmh = 0.0
+        arrivalMinutes = null
+        manualOverride = null
+        previousFix = null // prevent a jump from a GPS fix before the reset
+        lastClockAt = now
         refreshRecording()
         persistTrip()
     }
@@ -293,5 +322,5 @@ class DashboardController(val context: Context) {
 
     fun updateBrightness(value: Float) { brightness = value.coerceIn(0.02f, 1f) }
     fun saveBrightness() { store.saveBrightness(brightness) }
-    private fun persistTrip() { store.saveTrip(targetKm, distanceKm, elapsedMs) }
+    private fun persistTrip() { store.saveTrip(targetKm, distanceKm, accurateElapsedMs) }
 }
