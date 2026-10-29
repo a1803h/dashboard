@@ -1,4 +1,10 @@
-# Drive Dashboard 1.2.0-alpha1
+# Drive Dashboard 1.2.1-alpha1
+
+## Update 1.2.1
+- Three-character maximum numeric values on all six tiles: 9.5, 10, 125. Whole numbers have no .0; 1000+ is displayed as 999 due to the 3-character limit (underlying reading is retained).
+- Brightness control is redrawn with the exact two Figma layers and their correct stacking: 1312 × 170.406, border 14.481 #212121, black inset background, #BABABA foreground pill starting at the same outer-left coordinate with no inset. Both caps remain round. Dynamic foreground length still follows actual selected brightness; the Figma screenshot illustrates approximately 58% brightness.
+- Everything else remains unchanged from 1.2.0-alpha1.
+
 
 Updated Figma: https://www.figma.com/design/hQgk5FZRL6ShbtnAiIcd8j/Untitled?node-id=1-540
 

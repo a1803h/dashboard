@@ -1,5 +1,6 @@
 package tj.umed.drivedashboard
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,6 +21,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -50,13 +54,6 @@ fun Modifier.frameAt(x: Number, y: Number, width: Number, height: Number, scale:
     this.offset(x = (x.toFloat() * scale).dp, y = (y.toFloat() * scale).dp)
         .size((width.toFloat() * scale).dp, (height.toFloat() * scale).dp)
 
-private fun amountKm(km: Double): String = when {
-    km <= 0.00001 -> "000"
-    km < 100.0 -> String.format(Locale.getDefault(), "%.1f", km)
-    else -> km.roundToInt().toString()
-}
-
-private fun countValue(value: Int): String = if (value == 0) "000" else value.toString()
 
 @Composable
 private fun Tile(
@@ -82,12 +79,8 @@ private fun Tile(
             fontSize = (36.92f * scale).sp, lineHeight = (52.5f * scale).sp,
             textAlign = TextAlign.Center, maxLines = 1
         )
-        val fontSize = when {
-            value.length <= 3 -> 261.6f
-            value.length == 4 -> 213f
-            value.length == 5 -> 175f
-            else -> 142f
-        }
+        // All number strings are <= 3 characters; the original MiSans font size is constant.
+        val fontSize = 261.6f
         Text(
             value,
             Modifier.fillMaxWidth().offset(y = (51.06f * scale).dp),
@@ -167,18 +160,18 @@ fun DashboardScreen(
                     lineHeight = (52f * scale).sp
                 )
 
-                Tile(64, 343, "Осталось", amountKm(controller.remainingKm), "км", scale)
+                Tile(64, 343, "Осталось", TileNumberFormatter.kilometers(controller.remainingKm), "км", scale)
                 Tile(
-                    755, 343, "Пройдено", amountKm(controller.distanceKm), "км", scale,
+                    755, 343, "Пройдено", TileNumberFormatter.kilometers(controller.distanceKm), "км", scale,
                     Modifier.pointerInput(controller) {
                         detectTapGestures(onLongPress = { controller.resetTripKeepingTarget() })
                     }
                 )
-                Tile(64, 886, "Прибытие", controller.arrivalMinutes?.let(::countValue) ?: "—", "мин", scale)
-                Tile(755, 886, "Прошло", countValue((controller.elapsedMs / 60000L).toInt()), "мин", scale)
+                Tile(64, 886, "Прибытие", controller.arrivalMinutes?.let { TileNumberFormatter.integer(it) } ?: "—", "мин", scale)
+                Tile(755, 886, "Прошло", TileNumberFormatter.integer((controller.elapsedMs / 60000L).toInt()), "мин", scale)
 
                 Tile(
-                    64, 1429, "Скорость", countValue(controller.speedKmh.roundToInt()), "км/ч", scale,
+                    64, 1429, "Скорость", TileNumberFormatter.integer(controller.speedKmh.roundToInt()), "км/ч", scale,
                     Modifier.pointerInput(controller) {
                         detectTapGestures(
                             onDoubleTap = { controller.toggleManualPause() },
@@ -187,7 +180,7 @@ fun DashboardScreen(
                     }
                 )
                 Tile(
-                    755, 1429, "Расстояние", amountKm(controller.targetKm), "км", scale,
+                    755, 1429, "Расстояние", TileNumberFormatter.kilometers(controller.targetKm), "км", scale,
                     Modifier.clickable {
                         distanceInput = if (controller.targetKm > 0) controller.targetKm.toString() else ""
                         editDistance = true
@@ -202,15 +195,8 @@ fun DashboardScreen(
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Medium, fontFamily = MiSansFamily
                 )
-                Box(
-                    Modifier.frameAt(64, 2046.59, 1312, 170.4, scale)
-                        .clip(RoundedCornerShape((143f * scale).dp))
-                        .background(Color.Black)
-                        .border(
-                            (14.48f * scale).dp,
-                            Color(0xFF212121),
-                            RoundedCornerShape((143f * scale).dp)
-                        )
+                Canvas(
+                    Modifier.frameAt(64, 2046.59, 1312, 170.406, scale)
                         .pointerInput(Unit) {
                             detectTapGestures(onTap = {
                                 onBrightness((it.x / size.width).coerceIn(0.02f, 1f))
@@ -227,11 +213,32 @@ fun DashboardScreen(
                             )
                         }
                 ) {
-                    Box(
-                        Modifier.fillMaxHeight()
-                            .fillMaxWidth(controller.brightness)
-                            .clip(RoundedCornerShape((143f * scale).dp))
-                            .background(Color(0xFFBABABA))
+                    // Figma layers: dark bordered black pill is BEHIND the gray pill.
+                    // The gray fill starts at x=64, not inset by the border.
+                    val radius = size.height / 2f // Figma 143.203, clamped to half height.
+                    val border = size.height * (14.481f / 170.406f)
+                    drawRoundRect(
+                        color = Color(0xFF212121),
+                        cornerRadius = CornerRadius(radius, radius)
+                    )
+                    drawRoundRect(
+                        color = Color.Black,
+                        topLeft = Offset(border, border),
+                        size = Size(
+                            (size.width - 2f * border).coerceAtLeast(0f),
+                            (size.height - 2f * border).coerceAtLeast(0f)
+                        ),
+                        cornerRadius = CornerRadius(
+                            (radius - border).coerceAtLeast(0f),
+                            (radius - border).coerceAtLeast(0f)
+                        )
+                    )
+                    val fillWidth = size.width * controller.brightness.coerceIn(0.02f, 1f)
+                    drawRoundRect(
+                        color = Color(0xFFBABABA),
+                        topLeft = Offset.Zero,
+                        size = Size(fillWidth, size.height),
+                        cornerRadius = CornerRadius(radius, radius)
                     )
                 }
 
