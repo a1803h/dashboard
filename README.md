@@ -1,4 +1,11 @@
-# Drive Dashboard 1.2.2-alpha1
+# Drive Dashboard 1.2.3-alpha1
+
+## Update 1.2.3
+- Speed tile uses dark red (#3A1414) for a manually forced pause, dark yellow (#40340C) for forced recording, and its original Figma dark gray (#151515) for automatic mode. These are **manual override indicators**: the tile stays normal in automatic mode even if walking detection pauses trip recording. Live GPS speed remains visible in all modes.
+- GPS fallback driving threshold changed from >=14 to strictly >5 km/h for 5.5 seconds. Walking detection covers 1.5 to 5 km/h for 12 seconds. Android Activity Recognition IN_VEHICLE / WALKING / ON_FOOT still works.
+- **Limitation:** 5+ km/h is not proof of a motor vehicle. Running, cycling or GPS noise may occasionally trigger a trip; this must be validated on the user's phone.
+- Updated the gesture description in Settings to explain the three speed-tile colors.
+
 
 ## Update 1.2.2
 - Slightly reduced the home-screen "НАСТРОЙКИ" label from 55.87 to 49.5 design-scaled sp, preserving the original button.

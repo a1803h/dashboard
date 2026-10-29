@@ -30,6 +30,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.ceil
 
+/** Manual recording override (unrelated to the live GPS speed indicator). */
+enum class SpeedTileMode { AUTOMATIC, MANUAL_PAUSED, MANUAL_RUNNING }
+
 class TripActivityReceiver : BroadcastReceiver() {
     companion object {
         var callback: ((Int) -> Unit)? = null
@@ -57,7 +60,14 @@ class DashboardController(val context: Context) {
     private var lastSavedAt = 0L
     private var lastBatteryReadAt = 0L
     private var accurateElapsedMs = store.travelMs()
-    private var manualOverride: Boolean? = null
+    private var manualOverride by mutableStateOf<Boolean?>(null)
+
+    val speedTileMode: SpeedTileMode
+        get() = when (manualOverride) {
+            true -> SpeedTileMode.MANUAL_RUNNING
+            false -> SpeedTileMode.MANUAL_PAUSED
+            null -> SpeedTileMode.AUTOMATIC
+        }
 
     var speedKmh by mutableStateOf(0.0); private set
     var gpsBars by mutableStateOf(0); private set

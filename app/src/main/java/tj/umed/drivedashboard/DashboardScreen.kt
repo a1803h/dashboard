@@ -41,6 +41,8 @@ import kotlin.math.roundToInt
 
 private val background = Color.Black
 private val tileBackground = Color(0xFF151515)
+private val speedManualPauseBackground = Color(0xFF3A1414) // Dark red: forced pause
+private val speedManualRunningBackground = Color(0xFF40340C) // Dark yellow: forced play
 private val tileText = Color(0xFFD9D9D9)
 private val unitText = Color(0xFF818181)
 private val pills = Color(0xFF242424)
@@ -63,12 +65,13 @@ private fun Tile(
     value: String,
     unit: String,
     scale: Float,
-    touch: Modifier = Modifier
+    touch: Modifier = Modifier,
+    tileColor: Color = tileBackground
 ) {
     Box(
         Modifier.frameAt(x, y, 621, 473.2, scale)
             .clip(RoundedCornerShape((75.1f * scale).dp))
-            .background(tileBackground)
+            .background(tileColor)
             .then(touch)
     ) {
         Text(
@@ -177,6 +180,11 @@ fun DashboardScreen(
                             onDoubleTap = { controller.toggleManualPause() },
                             onLongPress = { controller.useAutomaticMode() }
                         )
+                    },
+                    tileColor = when (controller.speedTileMode) {
+                        SpeedTileMode.MANUAL_PAUSED -> speedManualPauseBackground
+                        SpeedTileMode.MANUAL_RUNNING -> speedManualRunningBackground
+                        SpeedTileMode.AUTOMATIC -> tileBackground
                     }
                 )
                 Tile(

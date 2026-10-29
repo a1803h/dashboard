@@ -93,8 +93,9 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
                             fontSize = (48f * s).sp, fontWeight = FontWeight.Medium
                         )
                         Text(
-                            "Двойное нажатие — принудительная пауза или продолжение поездки. " +
-                                "Долгое нажатие — возврат к автоматическому определению движения.",
+                            "Двойное нажатие — ручная пауза (тёмно-красный фон) или " +
+                                "принудительное продолжение (тёмно-жёлтый фон). " +
+                                "Долгое нажатие — автоматический режим (обычный фон).",
                             color = Color(0xFF999999), fontFamily = MiSansFamily,
                             fontSize = (43f * s).sp, lineHeight = (64f * s).sp
                         )

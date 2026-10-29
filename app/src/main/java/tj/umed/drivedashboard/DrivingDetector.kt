@@ -1,6 +1,6 @@
 package tj.umed.drivedashboard
 
-/** GPS fallback for activity recognition. Stationary traffic does not count as walking. */
+/** GPS fallback for Activity Recognition. Over 5 km/h sustained indicates driving. */
 enum class Movement { WAITING, DRIVING, WALKING }
 
 class DrivingDetector {
@@ -10,11 +10,11 @@ class DrivingDetector {
     private var walkSince: Long? = null
 
     fun observe(speedKmh: Double, nowMs: Long) {
-        if (speedKmh >= 14.0) {
+        if (speedKmh > 5.0) {
             if (fastSince == null) fastSince = nowMs
             walkSince = null
             if (nowMs - (fastSince ?: nowMs) >= 5500L) movement = Movement.DRIVING
-        } else if (speedKmh in 1.5..8.0) {
+        } else if (speedKmh in 1.5..5.0) {
             if (walkSince == null) walkSince = nowMs
             fastSince = null
             if (nowMs - (walkSince ?: nowMs) >= 12000L) movement = Movement.WALKING
