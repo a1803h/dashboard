@@ -1,6 +1,7 @@
 package tj.umed.drivedashboard
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -13,8 +14,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
-import androidx.lifecycle.Lifecycle
-import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private lateinit var dashboard: DashboardController
@@ -22,11 +21,21 @@ class MainActivity : ComponentActivity() {
 
     private val locationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> if (granted) dashboard.start() }
+    ) { granted ->
+        if (granted) askForPermissions()
+    }
 
     private val recognitionPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { dashboard.start() }
+    ) {
+        askForNotificationPermission()
+    }
+
+    private val notificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        startTripService()
+    }
 
     @Suppress("DEPRECATION")
     private fun hideBars() {
@@ -38,7 +47,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        dashboard = DashboardController(this)
+        // State belongs to the process-level controller, not to this activity's lifecycle.
+        dashboard = TripRuntime.get(applicationContext)
         adaptiveDisplay = AdaptiveDisplay(this)
         hideBars()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -47,14 +57,6 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = darkColorScheme(), typography = MiSansTypography) {
                 var settings by remember { mutableStateOf(false) }
                 BackHandler(enabled = settings) { settings = false }
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                            dashboard.tick()
-                        }
-                        delay(1000L)
-                    }
-                }
                 if (settings) {
                     SettingsScreen(controller = dashboard, onBack = { settings = false })
                 } else {
@@ -85,8 +87,24 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
             recognitionPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
         } else {
-            dashboard.start()
+            askForNotificationPermission()
         }
+    }
+
+    private fun askForNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            startTripService()
+        }
+    }
+
+    /** Must initiate a location FGS while our activity is visible (Android 14+). */
+    private fun startTripService() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        val intent = Intent(this, TripTrackingService::class.java).setAction(TripTrackingService.ACTION_START)
+        runCatching { startForegroundService(intent) }
     }
 
     private fun applyBrightness(value: Float) {
@@ -99,11 +117,16 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         hideBars()
         if (::adaptiveDisplay.isInitialized) adaptiveDisplay.start()
-        if (::dashboard.isInitialized) dashboard.start()
+        // Returning to the dashboard re-establishes the service if the system killed it.
+        // startForegroundService is idempotent for an already running service.
+        if (::dashboard.isInitialized &&
+            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            startTripService()
+        }
     }
 
     override fun onPause() {
-        if (::dashboard.isInitialized) dashboard.stop()
+        // Deliberately do not stop the GPS controller: TripTrackingService owns its lifecycle.
         if (::adaptiveDisplay.isInitialized) adaptiveDisplay.restore()
         super.onPause()
     }

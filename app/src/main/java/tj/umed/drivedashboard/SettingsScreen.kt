@@ -51,7 +51,7 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
         val s = maxWidth.value / 1440f
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Box(Modifier.fillMaxWidth().height((3200f * s).dp)) {
+            Box(Modifier.fillMaxWidth().height((840f * s).dp)) {
                 Text(
                     "Настройки",
                     Modifier.frameAt(0, 154, 1440, 193, s),
@@ -74,10 +74,16 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
                 )
                 SettingsPill("Выбрать", 63f, 622.38f, 363.19f, 130.62f, s) { selecting = true }
                 SettingsPill("Сортировать", 473.74f, 622.93f, 493.58f, 129.52f, s) { sorting = true }
+            }
 
-                // Read-only gesture reference, below the existing app settings.
-                Column(
-                    Modifier.frameAt(63.45, 940, 1313, 1350, s),
+            // No fixed-height container: the descriptions wrap and the entire page scrolls.
+            Column(
+                    Modifier.fillMaxWidth().padding(
+                        start = (63.45f * s).dp,
+                        end = (63.45f * s).dp,
+                        top = (100f * s).dp,
+                        bottom = (180f * s).dp
+                    ),
                     verticalArrangement = Arrangement.spacedBy((58f * s).dp)
                 ) {
                     Text(
@@ -127,7 +133,6 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
                         )
                     }
                 }
-            }
         }
     }
     if (selecting) {
@@ -218,7 +223,7 @@ private fun SettingsPill(
     ) {
         Text(
             text, color = Color.White, fontFamily = MiSansFamily,
-            fontWeight = FontWeight.Normal, fontSize = (66.95f * scale).sp,
+            fontWeight = FontWeight.Normal, fontSize = (53f * scale).sp,
             textAlign = TextAlign.Center, maxLines = 1
         )
     }

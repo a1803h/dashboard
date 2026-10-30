@@ -195,7 +195,7 @@ class DashboardController(val context: Context) {
 
     private fun advanceClock(now: Long) {
         if (isRecording && now > lastClockAt) {
-            accurateElapsedMs += (now - lastClockAt).coerceAtMost(10000L)
+            accurateElapsedMs += (now - lastClockAt)
         }
         lastClockAt = now
         // The visible "ПРОШЛО" tile changes by minutes, not every second.
@@ -223,7 +223,7 @@ class DashboardController(val context: Context) {
         var actualSpeed = if (fix.hasSpeed() && fix.speed.isFinite()) (fix.speed * 3.6).toDouble() else 0.0
         val dt = if (previous == null) 0.0 else
             (fix.elapsedRealtimeNanos - previous.elapsedRealtimeNanos) / 1_000_000_000.0
-        if (!fix.hasSpeed() && previous != null && dt in 0.5..10.0)
+        if (!fix.hasSpeed() && previous != null && dt in 0.5..120.0)
             actualSpeed = previous.distanceTo(fix).toDouble() / dt * 3.6
         if (actualSpeed !in 0.0..250.0) return
         // The speed tile always uses the latest GNSS speed, not an average.
@@ -231,7 +231,7 @@ class DashboardController(val context: Context) {
         detector.observe(speedKmh, now)
         refreshRecording()
 
-        if (previous != null && isRecording && dt in 0.5..10.0 &&
+        if (previous != null && isRecording && dt in 0.5..120.0 &&
             previous.hasAccuracy() && previous.accuracy <= 25f && fix.accuracy <= 25f) {
             val meters = previous.distanceTo(fix).toDouble()
             val reasonable = meters >= 1.5 && meters < dt * 65.0 &&

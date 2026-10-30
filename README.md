@@ -1,4 +1,13 @@
-# Drive Dashboard 1.2.3-alpha1
+# Drive Dashboard 1.2.4-alpha1
+
+## Update 1.2.4
+- TripTrackingService now owns GPS callbacks, Activity Recognition, the trip stopwatch and periodic persistence, running as a **location foreground service** with persistent notification and explicit **Остановить** action. Open it while visible and it continues after switching apps or turning the screen off. No ACCESS_BACKGROUND_LOCATION required for this started-in-foreground service.
+- MainActivity shares one DashboardController instance with the foreground service through TripRuntime, and no longer calls stop() in onPause. Returning to the activity reuses live state.
+- Handles delayed Android Doze tick delivery without losing trip time; allows up to 120 s between good satellite fixes when measuring distance. Very large gaps and poor GPS fixes remain filtered.
+- Android 14/15 location FGS permissions and Android 13 notification permission are declared/requested.
+- Settings gesture descriptions are content-sized in a scrolling page rather than cropped by a fixed-height box; "Выбрать" and "Сортировать" text was reduced from 66.95 to 53 design units.
+- This still depends on Android/HyperOS background execution policies, battery optimization and satellite visibility; disabling background execution or force-stopping the app may stop tracking.
+
 
 ## Update 1.2.3
 - Speed tile uses dark red (#3A1414) for a manually forced pause, dark yellow (#40340C) for forced recording, and its original Figma dark gray (#151515) for automatic mode. These are **manual override indicators**: the tile stays normal in automatic mode even if walking detection pauses trip recording. Live GPS speed remains visible in all modes.
