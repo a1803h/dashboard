@@ -44,10 +44,22 @@ class DashboardStore(context: Context) {
     fun targetKm(): Double = prefs.getFloat("trip_total", 0f).toDouble()
     fun distanceKm(): Double = prefs.getFloat("trip_distance", 0f).toDouble()
     fun travelMs(): Long = prefs.getLong("trip_elapsed", 0L)
-    fun saveTrip(target: Double, distance: Double, duration: Long) {
+
+    /**
+     * Independent route progress. Existing installations keep their remaining-distance
+     * calculation on first upgrade; the independent traveled counter is never discarded.
+     */
+    fun routeKm(): Double = prefs.getFloat(
+        "route_distance",
+        if (targetKm() > 0.0) prefs.getFloat("trip_distance", 0f) else 0f
+    ).toDouble()
+
+    fun saveTrip(target: Double, distance: Double, duration: Long, routeDistance: Double) {
         prefs.edit().putFloat("trip_total", target.toFloat())
             .putFloat("trip_distance", distance.toFloat())
-            .putLong("trip_elapsed", duration).apply()
+            .putLong("trip_elapsed", duration)
+            .putFloat("route_distance", routeDistance.toFloat())
+            .apply()
     }
     fun brightness(): Float = prefs.getFloat("brightness", 0.70f)
     fun saveBrightness(value: Float) = prefs.edit().putFloat("brightness", value).apply()

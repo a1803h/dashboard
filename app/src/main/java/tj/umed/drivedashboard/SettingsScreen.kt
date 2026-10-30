@@ -113,8 +113,9 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
                             fontSize = (48f * s).sp, fontWeight = FontWeight.Medium
                         )
                         Text(
-                            "Долгое нажатие — сброс пройденных километров и времени поездки. " +
-                                "Заданное расстояние до пункта назначения сохраняется.",
+                            "Двойное или долгое нажатие — сброс только счётчика «Пройдено». " +
+                                "Он учитывает ходьбу и продолжает работать даже при паузе записи поездки. " +
+                                "Время и расстояние до пункта назначения не обнуляются.",
                             color = Color(0xFF999999), fontFamily = MiSansFamily,
                             fontSize = (43f * s).sp, lineHeight = (64f * s).sp
                         )
@@ -126,8 +127,9 @@ fun SettingsScreen(controller: DashboardController, onBack: () -> Unit) {
                             fontSize = (48f * s).sp, fontWeight = FontWeight.Medium
                         )
                         Text(
-                            "Одно нажатие — ввод или изменение расстояния до конечного пункта. " +
-                                "Без заданного расстояния скорость, пройденный путь и время продолжают работать.",
+                            "Одно нажатие — ввод расстояния. «Сохранить» начинает новый маршрут, " +
+                                "но сохраняет счётчик «Пройдено». «Корректировка» изменяет только " +
+                                "расстояние, сохраняя остальные показания.",
                             color = Color(0xFF999999), fontFamily = MiSansFamily,
                             fontSize = (43f * s).sp, lineHeight = (64f * s).sp
                         )

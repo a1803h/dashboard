@@ -167,7 +167,10 @@ fun DashboardScreen(
                 Tile(
                     755, 343, "Пройдено", TileNumberFormatter.kilometers(controller.distanceKm), "км", scale,
                     Modifier.pointerInput(controller) {
-                        detectTapGestures(onLongPress = { controller.resetTripKeepingTarget() })
+                        detectTapGestures(
+                            onDoubleTap = { controller.resetTraveledOnly() },
+                            onLongPress = { controller.resetTraveledOnly() }
+                        )
                     }
                 )
                 Tile(64, 886, "Прибытие", controller.arrivalMinutes?.let { TileNumberFormatter.integer(it) } ?: "—", "мин", scale)
@@ -296,7 +299,11 @@ fun DashboardScreen(
             title = { Text("Расстояние до конечного пункта") },
             text = {
                 Column {
-                    Text("Введите общую дистанцию в километрах. Изменение начинает новую поездку.")
+                    Text(
+                        "Сохранить — новый маршрут: время и отсчёт маршрута начнутся заново, " +
+                            "но «Пройдено» сохранится. Корректировка — изменит только расстояние " +
+                            "без сброса других показаний."
+                    )
                     Spacer(Modifier.height(12.dp))
                     BasicTextField(
                         value = distanceInput,
@@ -316,15 +323,23 @@ fun DashboardScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    distanceInput.replace(',', '.').toDoubleOrNull()?.let {
-                        controller.setTarget(it)
-                        editDistance = false
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = {
+                        distanceInput.replace(',', '.').toDoubleOrNull()?.let {
+                            controller.correctTarget(it)
+                            editDistance = false
+                        }
+                    }) { Text("Корректировка") }
+                    Row(horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { editDistance = false }) { Text("Отмена") }
+                        TextButton(onClick = {
+                            distanceInput.replace(',', '.').toDoubleOrNull()?.let {
+                                controller.setTarget(it)
+                                editDistance = false
+                            }
+                        }) { Text("Сохранить") }
                     }
-                }) { Text("Сохранить") }
-            },
-            dismissButton = {
-                TextButton(onClick = { editDistance = false }) { Text("Отмена") }
+                }
             }
         )
     }

@@ -75,6 +75,8 @@ class DashboardController(val context: Context) {
     var gpsHasFix by mutableStateOf(false); private set
     var targetKm by mutableStateOf(store.targetKm()); private set
     var distanceKm by mutableStateOf(store.distanceKm()); private set
+    // Route progress is distinct from the continuously running "ПРОЙДЕНО" odometer.
+    private var routeDistanceKm by mutableStateOf(store.routeKm())
     var elapsedMs by mutableStateOf(store.travelMs()); private set
     var avgSpeedKmh by mutableStateOf(0.0); private set
     var arrivalMinutes by mutableStateOf<Int?>(null); private set
@@ -89,7 +91,7 @@ class DashboardController(val context: Context) {
     var isRecording by mutableStateOf(false); private set
     var manualControl by mutableStateOf(false); private set
 
-    val remainingKm: Double get() = (targetKm - distanceKm).coerceAtLeast(0.0)
+    val remainingKm: Double get() = (targetKm - routeDistanceKm).coerceAtLeast(0.0)
 
     private val listener = LocationListener { fix -> onFix(fix) }
     private val satellites = object : GnssStatus.Callback() {
@@ -231,12 +233,21 @@ class DashboardController(val context: Context) {
         detector.observe(speedKmh, now)
         refreshRecording()
 
-        if (previous != null && isRecording && dt in 0.5..120.0 &&
+        // Independent GPS odometer: always records actual movement while tracking,
+        // including WALKING and manual pause. Never gated by targetKm/remainingKm.
+        // The route progress and elapsed trip timer retain their separate driving rules.
+        if (previous != null && dt in 0.5..120.0 &&
             previous.hasAccuracy() && previous.accuracy <= 25f && fix.accuracy <= 25f) {
             val meters = previous.distanceTo(fix).toDouble()
-            val reasonable = meters >= 1.5 && meters < dt * 65.0 &&
-                (speedKmh >= 2.0 || actualSpeed >= 2.0)
-            if (reasonable) distanceKm += meters / 1000.0
+            val reasonable = meters >= 1.0 && meters < dt * 65.0 &&
+                (speedKmh >= 1.5 || actualSpeed >= 1.5)
+            if (reasonable) {
+                val deltaKm = meters / 1000.0
+                distanceKm += deltaKm
+                if (isRecording && targetKm > 0.0 && remainingKm > 0.0) {
+                    routeDistanceKm += deltaKm
+                }
+            }
         }
         previousFix = fix
         refreshRecording()
@@ -268,8 +279,8 @@ class DashboardController(val context: Context) {
     }
 
     private fun updateCalculated() {
-        avgSpeedKmh = if (accurateElapsedMs > 1000L && distanceKm > 0.0)
-            distanceKm * 3_600_000.0 / accurateElapsedMs else 0.0
+        avgSpeedKmh = if (accurateElapsedMs > 1000L && routeDistanceKm > 0.0)
+            routeDistanceKm * 3_600_000.0 / accurateElapsedMs else 0.0
         arrivalMinutes = when {
             targetKm <= 0 -> null
             remainingKm <= 0 -> 0
@@ -278,37 +289,38 @@ class DashboardController(val context: Context) {
         }
     }
 
+    /**
+     * Save a NEW destination. The independent odometer always survives.
+     * New route resets the route progress and trip timer only.
+     */
     fun setTarget(km: Double) {
         val validated = km.coerceIn(0.0, 99999.0)
         if (validated == targetKm) return
-        // Setting the first destination during an already active untargeted drive
-        // preserves driven kilometers and minutes; replacing a destination starts anew.
-        val hadTarget = targetKm > 0.0
-        if (hadTarget) {
-            distanceKm = 0.0
-            accurateElapsedMs = 0L
-            elapsedMs = 0L
-            manualOverride = null
-            previousFix = null
-        }
+        advanceClock(SystemClock.elapsedRealtime())
         targetKm = validated
+        routeDistanceKm = 0.0
+        accurateElapsedMs = 0L
+        elapsedMs = 0L
         lastClockAt = SystemClock.elapsedRealtime()
         refreshRecording()
         persistTrip()
     }
 
-    /** Reset tracked distance/time/ETA without clearing destination distance. */
-    fun resetTripKeepingTarget() {
-        val now = SystemClock.elapsedRealtime()
-        distanceKm = 0.0
-        accurateElapsedMs = 0L
-        elapsedMs = 0L
-        avgSpeedKmh = 0.0
-        arrivalMinutes = null
-        manualOverride = null
-        previousFix = null // prevent a jump from a GPS fix before the reset
-        lastClockAt = now
+    /** Correct only the target; preserve every other counter and mode. */
+    fun correctTarget(km: Double) {
+        val validated = km.coerceIn(0.0, 99999.0)
+        if (validated == targetKm) return
+        advanceClock(SystemClock.elapsedRealtime())
+        targetKm = validated
         refreshRecording()
+        persistTrip()
+    }
+
+    /** Only gestures on the "ПРОЙДЕНО" tile clear this independent GPS odometer. */
+    fun resetTraveledOnly() {
+        distanceKm = 0.0
+        // Avoid a replayed older GPS point immediately re-adding distance.
+        previousFix = null
         persistTrip()
     }
 
@@ -332,5 +344,5 @@ class DashboardController(val context: Context) {
 
     fun updateBrightness(value: Float) { brightness = value.coerceIn(0.02f, 1f) }
     fun saveBrightness() { store.saveBrightness(brightness) }
-    private fun persistTrip() { store.saveTrip(targetKm, distanceKm, accurateElapsedMs) }
+    private fun persistTrip() { store.saveTrip(targetKm, distanceKm, accurateElapsedMs, routeDistanceKm) }
 }

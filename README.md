@@ -1,4 +1,13 @@
-# Drive Dashboard 1.2.4-alpha1
+# Drive Dashboard 1.2.5-alpha1
+
+## Update 1.2.5
+- "ПРОЙДЕНО" is now an independent continuous GPS odometer, including walking or manually paused trip recording. It continues even after the destination is reached or when no destination is provided. It is reset **only** by double-tap or long-press on its own tile.
+- Added separate routeDistanceKm for "ОСТАЛОСЬ" and ETA. This preserves route semantics without linking the always-on odometer's accumulated total to the current trip. Existing installed users retain prior route progress on migration.
+- "Сохранить" starts a new route, resetting route progress and trip elapsed time, **not** the independent odometer. "Корректировка" modifies only the target distance, keeping all other counters and the active recording mode unchanged.
+- The distance editor contains separate "Корректировка", "Отмена", and "Сохранить" buttons.
+- Updated gesture descriptions in Settings.
+- Movement accumulation still requires credible, accurate GPS fixes; walking with inadequate satellite coverage may not be counted.
+
 
 ## Update 1.2.4
 - TripTrackingService now owns GPS callbacks, Activity Recognition, the trip stopwatch and periodic persistence, running as a **location foreground service** with persistent notification and explicit **Остановить** action. Open it while visible and it continues after switching apps or turning the screen off. No ACCESS_BACKGROUND_LOCATION required for this started-in-foreground service.
