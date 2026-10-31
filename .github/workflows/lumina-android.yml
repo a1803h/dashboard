@@ -1,0 +1,38 @@
+name: Build Lumina Android APK
+on:
+  push:
+    branches: [lumina-android]
+    paths:
+      - 'lumina/**'
+      - '.github/workflows/lumina-android.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Install Android SDK 37
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-37" "build-tools;36.0.0"
+      - name: Build Android debug APK
+        run: gradle --no-daemon -p lumina :app:assembleDebug --stacktrace
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lumina-Android-debug
+          path: lumina/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
