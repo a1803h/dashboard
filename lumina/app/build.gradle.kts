@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "tj.lumina.photo"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "tj.lumina.photo"
