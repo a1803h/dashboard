@@ -28,8 +28,10 @@ jobs:
         shell: bash
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-37" "build-tools;36.0.0"
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)
+          test -n "$SDKMANAGER" || { echo "Android sdkmanager missing"; exit 1; }
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-37" "build-tools;36.0.0"
       - name: Build Android debug APK
         run: gradle --no-daemon -p lumina :app:assembleDebug --stacktrace
       - name: Upload APK
