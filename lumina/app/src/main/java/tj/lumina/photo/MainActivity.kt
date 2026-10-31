@@ -412,7 +412,7 @@ private fun PhotoCompare(source: Bitmap, processed: Bitmap, position: Float, onP
         Image(
             processed.asImageBitmap(), null,
             modifier = Modifier.fillMaxSize().drawWithContent {
-                clipRect(left = size.width * position, top = 0f, right = size.width, bottom = size.height) { drawContent() }
+                clipRect(left = size.width * position, top = 0f, right = size.width, bottom = size.height) { this@drawWithContent.drawContent() }
             },
             contentScale = ContentScale.Fit
         )
