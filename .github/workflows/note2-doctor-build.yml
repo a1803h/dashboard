@@ -1,0 +1,39 @@
+name: Build Note 2 Doctor APK
+on:
+  push:
+    branches: [note2-doctor]
+    paths:
+      - 'note2-doctor-project.b64'
+      - '.github/workflows/note2-doctor-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract Android 7 project
+        run: |
+          mkdir -p note2
+          base64 --decode note2-doctor-project.b64 > /tmp/note2-project.zip
+          unzip -q /tmp/note2-project.zip -d note2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Assemble Note 2 Doctor
+        working-directory: note2
+        run: gradle --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Note2Doctor-v1.0-Android7-APK
+          path: note2/app/build/outputs/apk/debug/app-debug.apk
