@@ -3,6 +3,8 @@ on:
   push:
     branches: [lenovo-doctor-build]
   workflow_dispatch:
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
 jobs:
