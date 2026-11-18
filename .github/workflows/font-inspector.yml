@@ -1,0 +1,45 @@
+name: Font Inspector APK
+on:
+  push:
+    branches: [font-inspector-build]
+    paths:
+      - 'FontInspector/**'
+      - '.github/workflows/font-inspector.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Assemble installable debug APK
+        run: gradle -p FontInspector --no-daemon :app:assembleDebug
+      - name: Publish standalone APK into dedicated branch
+        run: |
+          mkdir -p downloads
+          cp FontInspector/app/build/outputs/apk/debug/app-debug.apk downloads/FontInspector.apk
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add downloads/FontInspector.apk
+          git commit -m "build: publish Font Inspector APK [skip ci]"
+          git push origin HEAD:font-inspector-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FontInspector-APK
+          path: downloads/FontInspector.apk
+          if-no-files-found: error
