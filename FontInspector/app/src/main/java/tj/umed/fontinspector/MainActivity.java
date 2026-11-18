@@ -72,12 +72,12 @@ public final class MainActivity extends Activity {
 
     static final class FontInfo {
         String path="",family="",subfamily="",fullName="",format="",axis="",origin="";
-        int weight=400,faceIndex=0,faceCount=1; boolean italic=false,variable=false;
+        int weight=400,faceIndex=0,faceCount=1; boolean italic=false,variable=false,registered=false;
         JSONObject json() throws Exception {
             JSONObject j=new JSONObject();j.put("path",path);j.put("family",family);
             j.put("subfamily",subfamily);j.put("full_name",fullName);j.put("format",format);
             j.put("weight",weight);j.put("weight_label",weightLabel(weight));j.put("italic",italic);
-            j.put("variable",variable);j.put("axes",axis);j.put("face_index",faceIndex);
+            j.put("variable",variable);j.put("registered_by_android",registered);j.put("axes",axis);j.put("face_index",faceIndex);
             j.put("faces_in_collection",faceCount);j.put("source",origin);return j;
         }
     }
@@ -98,7 +98,7 @@ public final class MainActivity extends Activity {
         List<FontInfo> fonts=new ArrayList<>();
         List<Mapping> mappings=new ArrayList<>();
         List<Area> areas=new ArrayList<>();
-        List<String> warnings=new ArrayList<>(),configs=new ArrayList<>();
+        List<String> warnings=new ArrayList<>(),configs=new ArrayList<>(),registeredPaths=new ArrayList<>();
         boolean root=false;
         String scanAt="";
     }
@@ -200,7 +200,7 @@ public final class MainActivity extends Activity {
             for(FontInfo f:data.fonts){String label=weightLabel(f.weight);
                 weights.put(label,weights.containsKey(label)?weights.get(label)+1:1);
                 if(f.variable)variable++;if(f.italic)italic++;}
-            add(sum,text("Курсив: "+italic+"    Вариативные: "+variable,13,WHITE,true),10);
+            add(sum,text("Курсив: "+italic+"    Вариативные: "+variable+"    Системных файлов: "+data.registeredPaths.size(),13,WHITE,true),10);
             for(Map.Entry<String,Integer> w:weights.entrySet())add(sum,text(w.getKey()+": "+w.getValue(),12,MUTED,false),6);
             add(body,sum,13);
         }
@@ -236,7 +236,7 @@ public final class MainActivity extends Activity {
             add(c,text(f.family,16,WHITE,true),4);
             String style=(f.subfamily.length()>0?f.subfamily:"Regular")+
                 "  ·  "+weightLabel(f.weight)+" ("+f.weight+")"+
-                (f.italic?"  ·  italic":"")+(f.variable?"  ·  variable":"");
+                (f.italic?"  ·  italic":"")+(f.variable?"  ·  variable":"")+(f.registered?"  ·  системный":"  ·  на диске");
             add(c,text(style,12,ACCENT,false),7);
             add(c,text(f.format+(f.faceCount>1?"  ·  TTC "+(f.faceIndex+1)+"/"+f.faceCount:"")+
                 (f.axis.isEmpty()?"":"  ·  "+f.axis),12,MUTED,false),6);
@@ -300,6 +300,7 @@ public final class MainActivity extends Activity {
             if(withRoot){r.root=isRoot();if(!r.root)r.warnings.add("ROOT не предоставлен: выполнен обычный анализ.");}
             for(String path:DIRS)walk(new File(path),0,r);
             if(r.root)scanProtected(r);
+            querySystemRegistry(r);
             for(String path:CONFIGS){try{
                 File f=new File(path);
                 if(!f.canRead()&&r.root)f=rootCopy(path,"config");
@@ -381,11 +382,30 @@ public final class MainActivity extends Activity {
             }
         }catch(Exception ex){r.warnings.add("ROOT-поиск: "+ex.getMessage());}
     }
+    private void querySystemRegistry(Result r){
+        if(Build.VERSION.SDK_INT<29)return;
+        try{
+            Set<android.graphics.fonts.Font> system=android.graphics.fonts.SystemFonts.getAvailableFonts();
+            Set<String> paths=new HashSet<>();
+            for(android.graphics.fonts.Font sf:system){
+                File file=sf.getFile();if(file==null)continue;
+                String path=file.getAbsolutePath();
+                if(paths.add(path)){
+                    r.registeredPaths.add(path);
+                    if(!seen.contains(path))addFont(file,path,"Android SystemFonts API",r);
+                }
+            }
+            for(FontInfo info:r.fonts)info.registered=paths.contains(info.path);
+        }catch(Exception ex){r.warnings.add("SystemFonts API: "+ex.getClass().getSimpleName());}
+    }
     private void readConfig(File file,String original,Result r)throws Exception{
         DocumentBuilderFactory factory=DocumentBuilderFactory.newInstance();
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl",true);
-        factory.setFeature("http://xml.org/sax/features/external-general-entities",false);
-        factory.setFeature("http://xml.org/sax/features/external-parameter-entities",false);
+        try{factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl",true);}
+        catch(Exception ignored){}
+        try{factory.setFeature("http://xml.org/sax/features/external-general-entities",false);}
+        catch(Exception ignored){}
+        try{factory.setFeature("http://xml.org/sax/features/external-parameter-entities",false);}
+        catch(Exception ignored){}
         factory.setExpandEntityReferences(false);
         InputStream in=new BufferedInputStream(new FileInputStream(file));
         Document doc;try{doc=factory.newDocumentBuilder().parse(in);}finally{in.close();}
@@ -489,6 +509,7 @@ public final class MainActivity extends Activity {
         j.put("model",Build.MODEL);j.put("android",Build.VERSION.RELEASE);
         j.put("sdk",Build.VERSION.SDK_INT);j.put("rom",Build.DISPLAY);
         j.put("root_granted",data.root);
+        JSONArray registered=new JSONArray();for(String path:data.registeredPaths)registered.put(path);j.put("android_registered_files",registered);
         JSONArray fonts=new JSONArray();for(FontInfo f:data.fonts)fonts.put(f.json());j.put("fonts",fonts);
         JSONArray mappings=new JSONArray();for(Mapping m:data.mappings)mappings.put(m.json());j.put("font_configuration",mappings);
         JSONArray areas=new JSONArray();for(Area a:data.areas)areas.put(a.json());j.put("interface_areas",areas);
