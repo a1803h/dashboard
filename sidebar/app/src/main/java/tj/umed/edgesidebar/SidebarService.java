@@ -137,37 +137,58 @@ public class SidebarService extends Service {
         iconView=null;gestureView=null;
         remove(panelView);panelView=null;panelOpen=true;
         lastY=y;
-        LinearLayout outer=new LinearLayout(this);outer.setOrientation(LinearLayout.HORIZONTAL);
-        outer.setGravity(Gravity.TOP|Gravity.CENTER_HORIZONTAL);outer.setClipChildren(false);
+        LinearLayout outer=new LinearLayout(this);
+        outer.setOrientation(LinearLayout.HORIZONTAL);
+        outer.setClipChildren(false);
         LinearLayout apps=makeAppRail();
         LinearLayout volume=makeVolumeRail();
         if(right()){
-            outer.addView(apps,new LinearLayout.LayoutParams(dp(66),dp(360)));
-            addGap(outer,dp(9));outer.addView(volume,new LinearLayout.LayoutParams(dp(52),dp(360)));
+            outer.addView(apps,new LinearLayout.LayoutParams(fig(182),fig(802)));
+            addGap(outer,fig(28));
+            outer.addView(volume,new LinearLayout.LayoutParams(fig(142),fig(802)));
         }else{
-            outer.addView(volume,new LinearLayout.LayoutParams(dp(52),dp(360)));
-            addGap(outer,dp(9));outer.addView(apps,new LinearLayout.LayoutParams(dp(66),dp(360)));
+            outer.addView(volume,new LinearLayout.LayoutParams(fig(142),fig(802)));
+            addGap(outer,fig(28));
+            outer.addView(apps,new LinearLayout.LayoutParams(fig(182),fig(802)));
         }
-        int height=screenH();int center=(iconLaunch || prefs.getBoolean("fixed",false))?height/2:y;
-        int top=Math.max(dp(35),Math.min(center-dp(180),height-dp(390)));
-        try{panelView=outer;wm.addView(panelView,params(dp(127),dp(365),dp(10),top));touch();}
+        int height=screenH();
+        int center=(iconLaunch || prefs.getBoolean("fixed",false))?height/2:y;
+        int top=Math.max(fig(45),Math.min(center-fig(401),height-fig(855)));
+        try{panelView=outer;wm.addView(panelView,params(fig(352),fig(802),fig(10),top));touch();}
         catch(Exception ignored){panelView=null;panelOpen=false;rebuildHandles();}
     }
+    private int fig(float figmaPixels){return dp(figmaPixels/2.72f);}
+    private static final int FIGMA_BG=0xff353535;
+    private static final int FIGMA_IDLE=0xff323232;
+    private static final int FIGMA_BLUE=0xff0086f8;
+    private static final int FIGMA_PALE=0xffd9d9d9;
+    private static final int FIGMA_ICON_IDLE=0xffd4d4d4;
+    private static final int FIGMA_ICON_GREY=0xff6e6e6e;
     private void addGap(LinearLayout parent,int width){parent.addView(new View(this),new LinearLayout.LayoutParams(width,1));}
     private LinearLayout makeAppRail(){
-        LinearLayout base=new LinearLayout(this);base.setOrientation(LinearLayout.VERTICAL);
-        base.setBackground(shape(DARK,17));base.setPadding(dp(7),dp(7),dp(7),dp(7));
-        base.setElevation(dp(8));
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);
-        LinearLayout stack=new LinearLayout(this);stack.setGravity(Gravity.TOP|Gravity.CENTER_HORIZONTAL);
-        stack.setOrientation(LinearLayout.VERTICAL);scroll.addView(stack);
+        LinearLayout base=new LinearLayout(this);
+        base.setOrientation(LinearLayout.VERTICAL);
+        base.setBackground(shape(FIGMA_BG,16));
+        base.setClipToOutline(true);
+        base.setElevation(fig(15));
+        ScrollView scroll=new ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
+        LinearLayout stack=new LinearLayout(this);
+        stack.setGravity(Gravity.TOP|Gravity.CENTER_HORIZONTAL);
+        stack.setOrientation(LinearLayout.VERTICAL);
+        stack.setPadding(0,fig(36),0,fig(36));
+        scroll.addView(stack,new ScrollView.LayoutParams(-1,-2));
         ArrayList<AppRepository.Item> items=AppRepository.ordered(this);
         if(items.isEmpty()){
-            TextView placeholder=glyph("+",28,0xffdddddd);
+            TextView placeholder=glyph("+",28,0xffeeeeee);
             placeholder.setOnClickListener(v->{
-                hidePanel();startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                hidePanel();
+                startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             });
-            stack.addView(placeholder,new LinearLayout.LayoutParams(-1,dp(52)));
+            LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(fig(110),fig(110));
+            stack.addView(placeholder,ip);
         }
         for(AppRepository.Item app:items){
             ImageView icon=new ImageView(this);
@@ -175,17 +196,28 @@ public class SidebarService extends Service {
             catch(Exception e){icon.setImageResource(android.R.drawable.sym_def_app_icon);}
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             icon.setContentDescription(app.title);
-            LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(dp(47),dp(47));
-            ip.setMargins(0,dp(4),0,dp(8));stack.addView(icon,ip);
+            LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(fig(110),fig(110));
+            ip.bottomMargin=fig(36);
+            stack.addView(icon,ip);
             icon.setOnClickListener(v->launchApp(app.pkg));
             icon.setOnLongClickListener(v->{
                 AppRepository.togglePin(this,app.pkg);
                 boolean pinned=prefs.getStringSet("pinned",Collections.emptySet()).contains(app.pkg);
                 Toast.makeText(this,pinned?"Закреплено: "+app.title:"Откреплено: "+app.title,Toast.LENGTH_SHORT).show();
-                showPanel(false,lastY);return true;
+                showPanel(false,lastY);
+                return true;
             });
         }
-        base.addView(scroll,new LinearLayout.LayoutParams(-1,-1));return base;
+        TextView settings=glyph("Settings",7,Color.WHITE);
+        settings.setBackground(shape(0xff6e6e6e,10));
+        settings.setContentDescription("Настройки Edge Sidebar");
+        settings.setOnClickListener(v->{
+            hidePanel();
+            startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        });
+        stack.addView(settings,new LinearLayout.LayoutParams(fig(110),fig(42)));
+        base.addView(scroll,new LinearLayout.LayoutParams(-1,-1));
+        return base;
     }
     private void launchApp(String pkg){
         try{
@@ -197,32 +229,36 @@ public class SidebarService extends Service {
         }catch(Exception e){Toast.makeText(this,"Не удалось открыть приложение",Toast.LENGTH_SHORT).show();}
     }
     private LinearLayout makeVolumeRail(){
-        LinearLayout rail=new LinearLayout(this);rail.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout top=new LinearLayout(this);top.setOrientation(LinearLayout.VERTICAL);top.setGravity(Gravity.CENTER_HORIZONTAL);
-        top.setPadding(dp(4),dp(5),dp(4),dp(8));top.setBackground(shape(DARK,16));top.setElevation(dp(7));
-        TextView dots=glyph("•••",13,0xff959595);dots.setContentDescription("Другие громкости");
-        dots.setOnClickListener(v->{touch();showExpandedSound();});
-        top.addView(dots,new LinearLayout.LayoutParams(-1,dp(30)));
-        VolumeSlider slider=new VolumeSlider(this);top.addView(slider,new LinearLayout.LayoutParams(dp(44),dp(215)));
-        rail.addView(top,new LinearLayout.LayoutParams(-1,dp(258)));
-        View mute=button(audio.getRingerMode()==AudioManager.RINGER_MODE_NORMAL?"♧":"♧",BLUE,Color.WHITE,this::toggleRinger);
-        // Notification-bell glyph: use a system vector icon instead of a font-dependent character.
-        ImageView muteIcon=new ImageView(this);muteIcon.setImageResource(android.R.drawable.ic_lock_silent_mode);
-        muteIcon.setColorFilter(Color.WHITE);
-        FrameLayout muteContainer=new FrameLayout(this);muteContainer.setBackground(shape(BLUE,18));
-        FrameLayout.LayoutParams mi=new FrameLayout.LayoutParams(dp(23),dp(23),Gravity.CENTER);
-        muteContainer.addView(muteIcon,mi);
-        muteContainer.setAlpha(audio.getRingerMode()==AudioManager.RINGER_MODE_NORMAL?0.65f:1f);
-        muteContainer.setContentDescription("Режим без звука");
-        muteContainer.setOnClickListener(v->{touch();toggleRinger();});
-        LinearLayout.LayoutParams mb=new LinearLayout.LayoutParams(-1,dp(43));mb.topMargin=dp(11);rail.addView(muteContainer,mb);
-        TextView dnd=glyph("☾",30,Color.WHITE);dnd.setBackground(shape(DARKER,17));
-        int filter=notifications.getCurrentInterruptionFilter();
-        dnd.setAlpha(filter==NotificationManager.INTERRUPTION_FILTER_ALL?0.72f:1f);
-        dnd.setContentDescription("Не беспокоить");
-        dnd.setOnClickListener(v->{touch();toggleDnd();});
-        LinearLayout.LayoutParams dn=new LinearLayout.LayoutParams(-1,dp(43));dn.topMargin=dp(8);rail.addView(dnd,dn);
+        LinearLayout rail=new LinearLayout(this);
+        rail.setOrientation(LinearLayout.VERTICAL);
+        VolumeSlider slider=new VolumeSlider(this);
+        slider.setElevation(fig(15));
+        rail.addView(slider,new LinearLayout.LayoutParams(fig(142),fig(554)));
+        View gap1=new View(this);
+        rail.addView(gap1,new LinearLayout.LayoutParams(1,fig(29)));
+        boolean muteActive=audio.getRingerMode()!=AudioManager.RINGER_MODE_NORMAL;
+        FrameLayout mute=createFigmaButton(muteActive?R.drawable.ic_figma_mute:R.drawable.ic_figma_bell,
+            muteActive, muteActive?44f:45.5f, 47f,"Режим без звука",this::toggleRinger);
+        rail.addView(mute,new LinearLayout.LayoutParams(fig(142),fig(95)));
+        rail.addView(new View(this),new LinearLayout.LayoutParams(1,fig(29)));
+        boolean dndActive=notifications.getCurrentInterruptionFilter()!=NotificationManager.INTERRUPTION_FILTER_ALL;
+        FrameLayout dnd=createFigmaButton(R.drawable.ic_figma_moon,dndActive,
+            42f,45f,"Не беспокоить",this::toggleDnd);
+        rail.addView(dnd,new LinearLayout.LayoutParams(fig(142),fig(95)));
         return rail;
+    }
+    private FrameLayout createFigmaButton(int drawable,boolean active,float iconWidth,float iconHeight,String label,Runnable action){
+        FrameLayout frame=new FrameLayout(this);
+        frame.setBackground(shape(active?FIGMA_BLUE:FIGMA_IDLE,15));
+        ImageView icon=new ImageView(this);
+        icon.setImageResource(drawable);
+        icon.setScaleType(ImageView.ScaleType.FIT_XY);
+        icon.setColorFilter(active?Color.WHITE:FIGMA_ICON_IDLE);
+        FrameLayout.LayoutParams ip=new FrameLayout.LayoutParams(fig(iconWidth),fig(iconHeight),Gravity.CENTER);
+        frame.addView(icon,ip);
+        frame.setContentDescription(label);
+        frame.setOnClickListener(v->{touch();action.run();});
+        return frame;
     }
     private void toggleRinger(){
         try{
@@ -273,26 +309,73 @@ public class SidebarService extends Service {
         stack.addView(bar,new LinearLayout.LayoutParams(dp(260),dp(42)));
     }
     private final class VolumeSlider extends View {
-        private Paint paint=new Paint(3);
-        private int max;
-        VolumeSlider(Context c){super(c);max=Math.max(1,audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));setContentDescription("Громкость медиа");}
-        @Override protected void onDraw(Canvas c){
-            super.onDraw(c);float x=dp(1),w=getWidth()-dp(2),y=dp(2),h=getHeight()-dp(4);
-            paint.setColor(0xff424242);c.drawRoundRect(x,y,w,y+h,dp(14),dp(14),paint);
+        private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path clipShape=new Path();
+        private final int max;
+        private boolean threeDotsDown=false;
+        VolumeSlider(Context c){
+            super(c);
+            max=Math.max(1,audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+            setContentDescription("Громкость медиа. Три точки открывают остальные настройки.");
+        }
+        @Override protected void onDraw(Canvas canvas){
+            super.onDraw(canvas);
+            float w=getWidth(),h=getHeight();
+            float rad=fig(42);
+            clipShape.reset();
+            clipShape.addRoundRect(0,0,w,h,rad,rad,Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(clipShape);
+            paint.setColor(FIGMA_BG);
+            canvas.drawRect(0,0,w,h,paint);
             float fraction=Math.max(0,Math.min(1,audio.getStreamVolume(AudioManager.STREAM_MUSIC)/(float)max));
-            float top=y+h*(1-fraction);
-            paint.setColor(0xffd9d9d9);c.drawRoundRect(x,Math.max(top,y),w,y+h,dp(14),dp(14),paint);
-            paint.setTypeface(Typeface.DEFAULT_BOLD);paint.setTextSize(dp(23));paint.setTextAlign(Paint.Align.CENTER);
-            paint.setColor(0xff757575);c.drawText("♫",getWidth()/2f,getHeight()-dp(15),paint);
+            float start=h*(1-fraction);
+            if(fraction>0){
+                paint.setColor(FIGMA_PALE);
+                canvas.drawRoundRect(0,start,w,h+rad,rad,rad,paint);
+            }
+            paint.setColor(FIGMA_ICON_GREY);
+            for(int i=0;i<3;i++){
+                canvas.drawCircle(fig(53+i*18),fig(46),fig(5),paint);
+            }
+            android.graphics.drawable.Drawable note=getDrawable(R.drawable.ic_figma_music);
+            if(note!=null){
+                note.setTint(FIGMA_ICON_GREY);
+                note.setBounds(fig(51),fig(470),fig(91),fig(512));
+                note.draw(canvas);
+            }
+            canvas.restore();
         }
         @Override public boolean onTouchEvent(MotionEvent e){
-            if(e.getActionMasked()==MotionEvent.ACTION_DOWN || e.getActionMasked()==MotionEvent.ACTION_MOVE){
-                touch();float f=1-e.getY()/Math.max(1,getHeight());
-                int v=Math.round(Math.max(0,Math.min(1,f))*max);
-                try{audio.setStreamVolume(AudioManager.STREAM_MUSIC,v,0);}catch(SecurityException ignored){}
-                invalidate();return true;
+            switch(e.getActionMasked()){
+                case MotionEvent.ACTION_DOWN:
+                    threeDotsDown=e.getY()<=fig(100);
+                    touch();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if(threeDotsDown){
+                        if(e.getY()>fig(130))threeDotsDown=false;
+                        else return true;
+                    }
+                    setFromTouch(e.getY());
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    if(threeDotsDown && e.getY()<=fig(100)){
+                        touch();showExpandedSound();
+                    }else setFromTouch(e.getY());
+                    threeDotsDown=false;return true;
+                case MotionEvent.ACTION_CANCEL:
+                    threeDotsDown=false;return true;
             }
-            return e.getActionMasked()==MotionEvent.ACTION_UP || super.onTouchEvent(e);
+            return true;
+        }
+        private void setFromTouch(float y){
+            touch();
+            float fraction=1f-y/Math.max(1,getHeight());
+            int value=Math.round(Math.max(0,Math.min(1,fraction))*max);
+            try{audio.setStreamVolume(AudioManager.STREAM_MUSIC,value,0);}
+            catch(SecurityException ignored){}
+            invalidate();
         }
     }
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);if(panelOpen)hidePanel();else rebuildHandles();}
