@@ -20,8 +20,26 @@ public class MainActivity extends Activity {
 
     public static int dp(Context c, float x){ return Math.round(x*c.getResources().getDisplayMetrics().density); }
     public static GradientDrawable round(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(radius);return g;}
-    @Override public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("sidebar",MODE_PRIVATE);render();}
-    @Override protected void onResume(){super.onResume(); if(prefs!=null && prefs.getBoolean("enabled",false) && Settings.canDrawOverlays(this)) startPanel(); if(root!=null) render();}
+    public static final String EXTRA_SETTINGS="tj.umed.edgesidebar.OPEN_SETTINGS";
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        prefs=getSharedPreferences("sidebar",MODE_PRIVATE);
+        // Launcher icon: open the sidebar directly, do NOT show a floating trigger.
+        boolean openSettings=getIntent().getBooleanExtra(EXTRA_SETTINGS,false);
+        if(!openSettings && prefs.getBoolean("enabled",false) && Settings.canDrawOverlays(this)){
+            startPanel(true);
+            finish();
+            overridePendingTransition(0,0);
+            return;
+        }
+        render();
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        if(isFinishing())return;
+        if(prefs!=null && prefs.getBoolean("enabled",false) && Settings.canDrawOverlays(this))startPanel(false);
+        if(root!=null)render();
+    }
 
     private TextView text(String value,int size,int color) {
         TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setGravity(Gravity.CENTER_VERTICAL);return t;
@@ -44,9 +62,10 @@ public class MainActivity extends Activity {
         row.setOnClickListener(v->sw.setChecked(!sw.isChecked()));
         sw.setOnCheckedChangeListener((b,checked)->{
             prefs.edit().putBoolean(key,checked).apply();
-            if("enabled".equals(key) && !checked){stopService(new Intent(this,SidebarService.class));}
-            else if(prefs.getBoolean("enabled",false)) {
-                if(Settings.canDrawOverlays(this))startPanel();else askOverlay();
+            if("enabled".equals(key) && !checked){
+                stopService(new Intent(this,SidebarService.class));
+            }else if(prefs.getBoolean("enabled",false)){
+                if(Settings.canDrawOverlays(this))startPanel(false);else askOverlay();
             }
         });
         c.addView(row);
@@ -63,12 +82,37 @@ public class MainActivity extends Activity {
         root=new LinearLayout(this);root.setPadding(dp(this,18),dp(this,26),dp(this,18),dp(this,28));root.setOrientation(LinearLayout.VERTICAL);scroll.addView(root);setContentView(scroll);
         TextView title=text("EDGE SIDEBAR",25,Color.WHITE);title.setTypeface(null,1);root.addView(title);
         TextView sub=text("Панель громкости · приложения · жесты",13,muted);sub.setPadding(0,dp(this,4),0,dp(this,22));root.addView(sub);
-        LinearLayout g=group();label(g,"Работа панели","Значок для открытия остаётся доступным независимо от настройки жестов.");
-        switchRow(g,"Включить панель","Плавающий значок и сервис", "enabled",false);
-        switchRow(g,"Запуск жестом LSPosed","Удержать палец на краю ~350 мс и потянуть внутрь","gesture",true);
+        LinearLayout g=group();label(g,"Работа панели","Нажатие на иконку приложения на домашнем экране открывает сайдбар по центру. Отдельного экранного значка нет.");
+        switchRow(g,"Включить панель","Фоновый сервис без экранного значка","enabled",false);
+        switchRow(g,"Запуск жестом LSPosed","Свайп назад, затем удержание ~300 мс","gesture",true);
         switchRow(g,"Запасная область жеста","Если LSPosed-хук недоступен: отдельная область на краю, может мешать жесту «Назад»","edge_overlay_fallback",false);
         switchRow(g,"Фиксированная высота","Иначе появляется рядом с точкой начала жеста","fixed",false);
         switchRow(g,"Расположить справа","Выключено — слева","right",false);
+        LinearLayout scaleGroup=group();
+        label(scaleGroup,"Масштаб панели","Пропорционально изменяет всю панель, иконки, кнопки, отступы и ползунок громкости.");
+        TextView scaleValue=text("",15,Color.WHITE);
+        final int scale=prefs.getInt("scale_percent",100);
+        scaleValue.setText(scale+"%");
+        scaleGroup.addView(scaleValue);
+        SeekBar scaleSeek=new SeekBar(this);
+        scaleSeek.setMax(100);
+        scaleSeek.setProgress(Math.min(100,Math.max(0,scale-60)));
+        scaleGroup.addView(scaleSeek);
+        scaleSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar v,int progress,boolean user){
+                int value=60+progress;
+                scaleValue.setText(value+"%");
+                if(user){
+                    prefs.edit().putInt("scale_percent",value).apply();
+                    if(prefs.getBoolean("enabled",false) && Settings.canDrawOverlays(MainActivity.this))
+                        startPanel(false);
+                }
+            }
+            public void onStartTrackingTouch(SeekBar v){}
+            public void onStopTrackingTouch(SeekBar v){}
+        });
+        LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);
+        scaleGroup.addView(text("60%                                         160%",11,muted),sp);
         LinearLayout apps=group();label(apps,"Приложения","Закреплённые приложения всегда в списке. Остальные сортируются по последнему открытию без повторов.");
         addButton(apps,"Выбрать закреплённые приложения",this::choosePins);
         TextView tip=text("Удержание иконки в панели закрепляет или открепляет приложение. Список прокручивается.",12,muted);apps.addView(tip);
@@ -79,13 +123,17 @@ public class MainActivity extends Activity {
         label(rights,"LSPosed: "+(hookedAt>0?"получены жесты":"ожидание первого жеста"),"Активируйте модуль и отметьте com.miui.home и com.android.systemui; затем перезагрузите устройство.");
         NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         addButton(rights,"Не беспокоить  "+(nm.isNotificationPolicyAccessGranted()?"✓":"—"),this::askDnd);
-        LinearLayout extra=group();label(extra,"Особенности","Три точки панели открывают отдельные ползунки громкости и системные настройки звука. Режим без звука и «Не беспокоить» независимы.");
+        LinearLayout extra=group();label(extra,"Особенности","Три точки открывают штатную панель громкости MIUI. Беззвучный режим и «Не беспокоить» имеют независимые состояния.");
         TextView disclaimer=text("LSPosed получает жесты и системный порядок недавних задач из MIUI Home/SystemUI, если прошивка поддерживает эти хуки. При отсутствии прав доступен резерв через статистику использования. Системные разрешения на наложение и режим «Не беспокоить» всё ещё нужны.",12,muted);extra.addView(disclaimer);
     }
-    private void startPanel() {
+    private void startPanel(){startPanel(false);}
+    private void startPanel(boolean open){
         if(!Settings.canDrawOverlays(this))return;
         Intent s=new Intent(this,SidebarService.class);
-        if(Build.VERSION.SDK_INT>=26)startForegroundService(s);else startService(s);
+        s.setAction(open?SidebarService.ACTION_OPEN_PANEL:SidebarService.ACTION_REFRESH_CONFIG);
+        try{
+            if(Build.VERSION.SDK_INT>=26)startForegroundService(s);else startService(s);
+        }catch(IllegalStateException ignored){}
     }
     private void askOverlay(){Intent i=new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()));startActivity(i);}
     private void askDnd(){startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));}
