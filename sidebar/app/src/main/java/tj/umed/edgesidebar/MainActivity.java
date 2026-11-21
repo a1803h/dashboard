@@ -87,7 +87,7 @@ public class MainActivity extends Activity {
         switchRow(g,"Запуск жестом LSPosed","Свайп назад, затем удержание ~300 мс","gesture",true);
         switchRow(g,"Запасная область жеста","Если LSPosed-хук недоступен: отдельная область на краю, может мешать жесту «Назад»","edge_overlay_fallback",false);
         switchRow(g,"Фиксированная высота","Иначе появляется рядом с точкой начала жеста","fixed",false);
-        switchRow(g,"Расположить справа","Выключено — слева","right",false);
+        switchRow(g,"Сторона запуска по иконке","Выключено — слева; включено — справа. При запуске жестом сторона определяется автоматически.","right",false);
         LinearLayout scaleGroup=group();
         label(scaleGroup,"Масштаб панели","Пропорционально изменяет всю панель, иконки, кнопки, отступы и ползунок громкости.");
         TextView scaleValue=text("",15,Color.WHITE);
@@ -113,6 +113,12 @@ public class MainActivity extends Activity {
         });
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);
         scaleGroup.addView(text("60%                                         160%",11,muted),sp);
+        LinearLayout geometry=group();
+        label(geometry,"Дополнительные размеры","Настройки независимы от общего масштаба.");
+        addRangeSlider(geometry,"Масштаб панели приложений","Отдельно изменяет всю колонку приложений, её иконки и кнопку настроек.",
+            "app_scale_percent",60,160,100,"%");
+        addRangeSlider(geometry,"Отступ от края","Расстояние от левого или правого края до сайдбара.",
+            "edge_offset_dp",0,100,4," dp");
         LinearLayout apps=group();label(apps,"Приложения","Закреплённые приложения всегда в списке. Остальные сортируются по последнему открытию без повторов.");
         addButton(apps,"Выбрать закреплённые приложения",this::choosePins);
         TextView tip=text("Удержание иконки в панели закрепляет или открепляет приложение. Список прокручивается.",12,muted);apps.addView(tip);
@@ -125,6 +131,49 @@ public class MainActivity extends Activity {
         addButton(rights,"Не беспокоить  "+(nm.isNotificationPolicyAccessGranted()?"✓":"—"),this::askDnd);
         LinearLayout extra=group();label(extra,"Особенности","Три точки открывают штатную панель громкости MIUI. Беззвучный режим и «Не беспокоить» имеют независимые состояния.");
         TextView disclaimer=text("LSPosed получает жесты и системный порядок недавних задач из MIUI Home/SystemUI, если прошивка поддерживает эти хуки. При отсутствии прав доступен резерв через статистику использования. Системные разрешения на наложение и режим «Не беспокоить» всё ещё нужны.",12,muted);extra.addView(disclaimer);
+    }
+    private void addRangeSlider(LinearLayout parent,String title,String description,
+                                String key,int min,int max,int defaultValue,String suffix){
+        LinearLayout wrapper=new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        wrapper.setPadding(0,dp(this,6),0,dp(this,15));
+        LinearLayout heading=new LinearLayout(this);
+        heading.setOrientation(LinearLayout.HORIZONTAL);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        TextView label=text(title,15,Color.WHITE);
+        heading.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+        int current=Math.min(max,Math.max(min,prefs.getInt(key,defaultValue)));
+        TextView number=text(current+suffix,14,muted);
+        number.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        heading.addView(number,new LinearLayout.LayoutParams(dp(this,68),-2));
+        wrapper.addView(heading);
+        TextView info=text(description,12,muted);
+        info.setPadding(0,dp(this,5),0,dp(this,7));
+        wrapper.addView(info);
+        SeekBar seek=new SeekBar(this);
+        seek.setMax(max-min);
+        seek.setProgress(current-min);
+        wrapper.addView(seek,new LinearLayout.LayoutParams(-1,dp(this,40)));
+        LinearLayout ends=new LinearLayout(this);
+        TextView left=text(min+suffix,11,muted);
+        TextView right=text(max+suffix,11,muted);
+        right.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        ends.addView(left,new LinearLayout.LayoutParams(0,-2,1));
+        ends.addView(right,new LinearLayout.LayoutParams(0,-2,1));
+        wrapper.addView(ends);
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
+                int value=min+progress;
+                number.setText(value+suffix);
+                if(fromUser)prefs.edit().putInt(key,value).apply();
+            }
+            public void onStartTrackingTouch(SeekBar bar){}
+            public void onStopTrackingTouch(SeekBar bar){
+                if(prefs.getBoolean("enabled",false)&&Settings.canDrawOverlays(MainActivity.this))
+                    startPanel(false);
+            }
+        });
+        parent.addView(wrapper,new LinearLayout.LayoutParams(-1,-2));
     }
     private void startPanel(){startPanel(false);}
     private void startPanel(boolean open){
