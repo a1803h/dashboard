@@ -29,7 +29,7 @@ public class SidebarService extends Service {
         if(recents!=null && recents.length>0){
           StringBuilder sb=new StringBuilder();
           for(String name:recents){if(name!=null && name.matches("[a-zA-Z0-9_.]{3,200}") && !name.equals(getPackageName())){
-             if(sb.length()>0)sb.append("\\n");sb.append(name);
+             if(sb.length()>0)sb.append('|');sb.append(name);
           }}
           prefs.edit().putString("hook_recents",sb.toString()).putLong("hook_recents_at",System.currentTimeMillis()).putLong("hook_active_at",System.currentTimeMillis()).apply();
         }else prefs.edit().putLong("hook_active_at",System.currentTimeMillis()).apply();
