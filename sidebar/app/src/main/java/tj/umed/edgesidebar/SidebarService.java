@@ -22,36 +22,36 @@ public class SidebarService extends Service {
     public static final String ACTION_REFRESH_CONFIG="tj.umed.edgesidebar.lsposed.REFRESH_CONFIG";
     private FrameLayout muteButton,dndButton;
     private ImageView muteImage,dndImage;
-    public static final String ACTION_HOOK_GESTURE="tj.umed.edgesidebar.lsposed.ACTION_HOOK_GESTURE";
     public static final String ACTION_LAST_BACK_SIDE="tj.umed.edgesidebar.lsposed.ACTION_LAST_BACK_SIDE";
-    private long lastHookGesture=0;
-    private final BroadcastReceiver hookCommands=new BroadcastReceiver(){
+    private final BroadcastReceiver backObserver=new BroadcastReceiver(){
       @Override public void onReceive(Context context,Intent intent){
-        if(ACTION_LAST_BACK_SIDE.equals(intent.getAction())){
-            boolean fromRight=intent.getBooleanExtra("back_from_right",right());
-            prefs.edit().putBoolean("last_back_right",fromRight).apply();
-            return;
+        if(!ACTION_LAST_BACK_SIDE.equals(intent.getAction()))return;
+        boolean fromRight=intent.getBooleanExtra("back_from_right",lastBackRight());
+        android.content.SharedPreferences.Editor update=prefs.edit()
+            .putBoolean("last_back_right",fromRight)
+            .putLong("hook_active_at",System.currentTimeMillis());
+        String[] recent=intent.getStringArrayExtra("recents");
+        if(recent!=null && recent.length>0){
+            StringBuilder sb=new StringBuilder();
+            for(String name:recent){
+                if(name!=null && name.matches("[a-zA-Z0-9_.]{3,200}") &&
+                    !name.equals(getPackageName())){
+                    if(sb.length()>0)sb.append('|');
+                    sb.append(name);
+                }
+            }
+            if(sb.length()>0){
+                update.putString("hook_recents",sb.toString())
+                      .putLong("hook_recents_at",System.currentTimeMillis());
+            }
         }
-        if(!ACTION_HOOK_GESTURE.equals(intent.getAction()) || !prefs.getBoolean("enabled",false) || !prefs.getBoolean("gesture",true))return;
-        if(SystemClock.elapsedRealtime()-lastHookGesture<650)return;
-        lastHookGesture=SystemClock.elapsedRealtime();
-        String[] recents=intent.getStringArrayExtra("recents");
-        if(recents!=null && recents.length>0){
-          StringBuilder sb=new StringBuilder();
-          for(String name:recents){if(name!=null && name.matches("[a-zA-Z0-9_.]{3,200}") && !name.equals(getPackageName())){
-             if(sb.length()>0)sb.append('|');sb.append(name);
-          }}
-          prefs.edit().putString("hook_recents",sb.toString()).putLong("hook_recents_at",System.currentTimeMillis()).putLong("hook_active_at",System.currentTimeMillis()).apply();
-        }else prefs.edit().putLong("hook_active_at",System.currentTimeMillis()).apply();
-        int rawY=intent.getIntExtra("rawY",screenH()/2);
-        // Use the last recognized Back swipe, including ordinary quick swipes.
-        boolean fromRight=prefs.getBoolean("last_back_right",
-            intent.getBooleanExtra("gesture_from_right",right()));
-        showPanel(false,Math.max(dp(25),Math.min(rawY,screenH()-dp(25))),fromRight);
+        update.apply();
+        // Passive observer: no panel opening in response to a Back swipe.
       }
     };
     private Runnable dismiss=()->hidePanel();
     private boolean panelOpen=false;
+    private boolean fingerOnPanel=false;
     private int lastY=0;
     private boolean panelRight=false;
     private static final int DARK=0xff353535, DARKER=0xff292929, BLUE=0xff078efa;
@@ -67,10 +67,9 @@ public class SidebarService extends Service {
             prefs.edit().putBoolean("mute_enabled",audio.getRingerMode()!=AudioManager.RINGER_MODE_NORMAL).apply();
         if(!prefs.contains("dnd_enabled"))
             prefs.edit().putBoolean("dnd_enabled",notifications.getCurrentInterruptionFilter()!=NotificationManager.INTERRUPTION_FILTER_ALL).apply();
-        IntentFilter filter=new IntentFilter(ACTION_HOOK_GESTURE);
-        filter.addAction(ACTION_LAST_BACK_SIDE);
-        if(Build.VERSION.SDK_INT>=33)registerReceiver(hookCommands,filter,Context.RECEIVER_EXPORTED);
-        else registerReceiver(hookCommands,filter);
+        IntentFilter filter=new IntentFilter(ACTION_LAST_BACK_SIDE);
+        if(Build.VERSION.SDK_INT>=33)registerReceiver(backObserver,filter,Context.RECEIVER_EXPORTED);
+        else registerReceiver(backObserver,filter);
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         if(!prefs.getBoolean("enabled",false) || !Settings.canDrawOverlays(this)){
@@ -79,8 +78,10 @@ public class SidebarService extends Service {
         startForeground(41,notification());
         String action=intent==null?null:intent.getAction();
         if(ACTION_OPEN_PANEL.equals(action)){
-            if(panelOpen)touch();
-            else showPanel(true,screenH()/2);
+            if(panelOpen){
+                if(panelRight!=lastBackRight())showPanel(true,screenH()/2,lastBackRight());
+                else touch();
+            }else showPanel(true,screenH()/2);
         }else if(ACTION_REFRESH_CONFIG.equals(action)){
             if(panelOpen)showPanel(false,lastY,panelRight);
             else rebuildHandles();
@@ -123,43 +124,10 @@ public class SidebarService extends Service {
     }
     private void remove(View v){if(v!=null){try{wm.removeViewImmediate(v);}catch(Exception ignored){}}}
     private void rebuildHandles(){
-        // Neither edge receives a visible handle. Fallback zones are opt-in.
+        // No edge overlays and no Back gesture launch. Only the home-screen
+        // icon can open the sidebar; LSPosed passively remembers Back side.
         remove(iconView);remove(gestureView);remove(gestureViewRight);
         iconView=null;gestureView=null;gestureViewRight=null;
-        if(!prefs.getBoolean("enabled",false)||!Settings.canDrawOverlays(this))return;
-        if(prefs.getBoolean("gesture",true)&&prefs.getBoolean("edge_overlay_fallback",false)){
-            int sh=screenH(),h=(int)(sh*0.58f),y=(sh-h)/2;
-            try{
-                gestureView=makeFallbackZone(false);
-                wm.addView(gestureView,params(dp(20),h,0,y,false));
-            }catch(Exception ignored){gestureView=null;}
-            try{
-                gestureViewRight=makeFallbackZone(true);
-                wm.addView(gestureViewRight,params(dp(20),h,0,y,true));
-            }catch(Exception ignored){gestureViewRight=null;}
-        }
-    }
-    private View makeFallbackZone(final boolean fromRight){
-        return new View(this){
-            private float startX,startY;
-            private boolean opened;
-            @Override public boolean onTouchEvent(MotionEvent ev){
-                switch(ev.getActionMasked()){
-                    case MotionEvent.ACTION_DOWN:
-                        startX=ev.getRawX();startY=ev.getRawY();opened=false;return true;
-                    case MotionEvent.ACTION_MOVE:
-                        if(opened)return true;
-                        float dx=ev.getRawX()-startX;
-                        if((fromRight && dx<-dp(26))||(!fromRight && dx>dp(26))){
-                            opened=true;
-                            prefs.edit().putBoolean("last_back_right",fromRight).apply();
-                            showPanel(false,(int)startY,lastBackRight());
-                        }
-                        return true;
-                    default:return true;
-                }
-            }
-        };
     }
     private TextView glyph(String value,int size,int color){
         TextView v=new TextView(this);v.setText(value);v.setGravity(Gravity.CENTER);
@@ -171,11 +139,15 @@ public class SidebarService extends Service {
     }
     private void touch(){
         handler.removeCallbacks(dismiss);
-        int seconds=Math.min(120,Math.max(0,prefs.getInt("dismiss_after_seconds",12)));
-        if(panelOpen && seconds>0)handler.postDelayed(dismiss,seconds*1000L);
+        int seconds=Math.min(60,Math.max(0,prefs.getInt("dismiss_after_seconds",12)));
+        // No countdown while a finger is resting, dragging or scrolling.
+        // Start the full interval only after interaction ends.
+        if(panelOpen && !fingerOnPanel && seconds>0)
+            handler.postDelayed(dismiss,seconds*1000L);
     }
     private void hidePanel(){
         handler.removeCallbacks(dismiss);
+        fingerOnPanel=false;
         remove(panelView);panelView=null;panelOpen=false;
         rebuildHandles();
     }
@@ -187,6 +159,7 @@ public class SidebarService extends Service {
         remove(iconView);remove(gestureView);remove(gestureViewRight);
         iconView=null;gestureView=null;gestureViewRight=null;
         remove(panelView);panelView=null;panelOpen=true;
+        fingerOnPanel=false;
         lastY=y;
         panelRight=fromRight;
 
@@ -197,11 +170,26 @@ public class SidebarService extends Service {
 
         LinearLayout outer=new LinearLayout(this){
             @Override public boolean dispatchTouchEvent(MotionEvent ev){
-                if(ev.getActionMasked()==MotionEvent.ACTION_OUTSIDE){
+                final int action=ev.getActionMasked();
+                if(action==MotionEvent.ACTION_OUTSIDE){
                     handler.post(()->hidePanel());
                     return true;
                 }
-                return super.dispatchTouchEvent(ev);
+                // Every touch event reaches the window root, including events
+                // intercepted by a ScrollView, icons and the volume slider.
+                if(action==MotionEvent.ACTION_DOWN ||
+                   action==MotionEvent.ACTION_POINTER_DOWN){
+                    fingerOnPanel=true;
+                    handler.removeCallbacks(dismiss);
+                }else if(action==MotionEvent.ACTION_MOVE){
+                    handler.removeCallbacks(dismiss);
+                }
+                boolean handled=super.dispatchTouchEvent(ev);
+                if(action==MotionEvent.ACTION_UP || action==MotionEvent.ACTION_CANCEL){
+                    fingerOnPanel=false;
+                    touch();  // reset inactivity countdown after the last action
+                }
+                return handled;
             }
         };
         outer.setOrientation(LinearLayout.HORIZONTAL);
@@ -519,7 +507,7 @@ public class SidebarService extends Service {
     }
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);if(panelOpen)hidePanel();else rebuildHandles();}
     @Override public void onDestroy(){
-        handler.removeCallbacks(dismiss);try{unregisterReceiver(hookCommands);}catch(Exception ignored){}remove(iconView);remove(gestureView);remove(gestureViewRight);remove(panelView);
+        handler.removeCallbacks(dismiss);try{unregisterReceiver(backObserver);}catch(Exception ignored){}remove(iconView);remove(gestureView);remove(gestureViewRight);remove(panelView);
         iconView=null;gestureView=null;gestureViewRight=null;panelView=null;super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent){return null;}
