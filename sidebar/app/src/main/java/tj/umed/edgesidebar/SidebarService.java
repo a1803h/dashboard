@@ -264,7 +264,7 @@ public class SidebarService extends Service {
                 AppRepository.togglePin(this,app.pkg);
                 boolean pinned=prefs.getStringSet("pinned",Collections.emptySet()).contains(app.pkg);
                 Toast.makeText(this,pinned?"Закреплено: "+app.title:"Откреплено: "+app.title,Toast.LENGTH_SHORT).show();
-                showPanel(false,lastY);
+                showPanel(false,lastY,panelRight);
                 return true;
             });
         }
@@ -467,7 +467,7 @@ public class SidebarService extends Service {
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);if(panelOpen)hidePanel();else rebuildHandles();}
     @Override public void onDestroy(){
         handler.removeCallbacks(dismiss);try{unregisterReceiver(hookCommands);}catch(Exception ignored){}remove(iconView);remove(gestureView);remove(gestureViewRight);remove(panelView);
-        iconView=null;gestureView=null;panelView=null;super.onDestroy();
+        iconView=null;gestureView=null;gestureViewRight=null;panelView=null;super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent){return null;}
 }
