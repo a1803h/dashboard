@@ -42,9 +42,18 @@ public final class AppRepository {
         }catch(Exception ignored){}
         String last=p.getString("last_package",null);
         if(last!=null)recent.merge(last,p.getLong("last_launch",0),Math::max);
+        // System recent-task ordering is preferable to usage statistics when the hook supplies it.
+        String hookValue=p.getString("hook_recents","");
+        long hookAge=System.currentTimeMillis()-p.getLong("hook_recents_at",0);
+        HashMap<String,Integer> hookOrder=new HashMap<>();
+        if(!hookValue.isEmpty() && hookAge>=0 && hookAge<120000L){
+            String[] names=hookValue.split("\\n");
+            for(int i=0;i<names.length;i++)if(!hookOrder.containsKey(names[i]))hookOrder.put(names[i],i);
+        }
         ArrayList<Map.Entry<String,Long>> ranked=new ArrayList<>(recent.entrySet());
         ranked.sort((a,b)->Long.compare(b.getValue(),a.getValue()));
         HashSet<String> merged=new HashSet<>(pinned);int n=0;
+        for(String pkg:hookOrder.keySet())if(pm.getLaunchIntentForPackage(pkg)!=null)merged.add(pkg);
         for(Map.Entry<String,Long> e:ranked){
             if(n>=12)break;
             if(pm.getLaunchIntentForPackage(e.getKey())!=null){merged.add(e.getKey());n++;}
