@@ -81,13 +81,10 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(bg);
         root=new LinearLayout(this);root.setPadding(dp(this,18),dp(this,26),dp(this,18),dp(this,28));root.setOrientation(LinearLayout.VERTICAL);scroll.addView(root);setContentView(scroll);
         TextView title=text("EDGE SIDEBAR",25,Color.WHITE);title.setTypeface(null,1);root.addView(title);
-        TextView sub=text("Панель громкости · приложения · жесты",13,muted);sub.setPadding(0,dp(this,4),0,dp(this,22));root.addView(sub);
+        TextView sub=text("Панель громкости · приложения · последняя сторона «Назад»",13,muted);sub.setPadding(0,dp(this,4),0,dp(this,22));root.addView(sub);
         LinearLayout g=group();label(g,"Работа панели","Нажатие на иконку приложения на домашнем экране открывает сайдбар по центру. Отдельного экранного значка нет.");
         switchRow(g,"Включить панель","Фоновый сервис без экранного значка","enabled",false);
-        switchRow(g,"Запуск жестом LSPosed","Свайп назад, затем удержание ~300 мс","gesture",true);
-        switchRow(g,"Запасная область жеста","Если LSPosed-хук недоступен: отдельная область на краю, может мешать жесту «Назад»","edge_overlay_fallback",false);
-        switchRow(g,"Фиксированная высота","Иначе появляется рядом с точкой начала жеста","fixed",false);
-        switchRow(g,"Сторона до первого свайпа назад","При запуске сайдбар использует сторону последнего свайпа «Назад». Здесь выбирается начальная сторона, если свайпов ещё не было.","right",false);
+        switchRow(g,"Сторона до первого свайпа назад","LSPosed запоминает левый или правый обычный свайп «Назад». Эта настройка действует только до первого распознанного свайпа.","right",false);
         LinearLayout scaleGroup=group();
         label(scaleGroup,"Масштаб панели","Пропорционально изменяет всю панель, иконки, кнопки, отступы и ползунок громкости.");
         TextView scaleValue=text("",15,Color.WHITE);
@@ -120,8 +117,8 @@ public class MainActivity extends Activity {
         addRangeSlider(geometry,"Отступ от края","Расстояние от левого или правого края до сайдбара.",
             "edge_offset_dp",0,100,4," dp");
         LinearLayout visibility=group();
-        label(visibility,"Время показа","Отсчёт обновляется при взаимодействии с панелью. При касании за пределами панели она закрывается сразу.");
-        addRangeSlider(visibility,"Автоматическое скрытие","0 секунд — не скрывать автоматически; от 1 до 60 секунд — задержка закрытия.",
+        label(visibility,"Время показа","Панель закрывается после указанного времени бездействия. Пока палец на панели, отсчёт приостановлен. После последнего касания таймер начинается заново.");
+        addRangeSlider(visibility,"Автоматическое скрытие при бездействии","0 секунд — без автоскрытия, 1–60 секунд — время после последнего действия.",
             "dismiss_after_seconds",0,60,12," с");
         LinearLayout apps=group();label(apps,"Приложения","Закреплённые приложения всегда в списке. Остальные сортируются по последнему открытию без повторов.");
         addButton(apps,"Выбрать закреплённые приложения",this::choosePins);
@@ -134,7 +131,7 @@ public class MainActivity extends Activity {
         NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         addButton(rights,"Не беспокоить  "+(nm.isNotificationPolicyAccessGranted()?"✓":"—"),this::askDnd);
         LinearLayout extra=group();label(extra,"Особенности","Три точки открывают первоначальный диалог громкости с тремя ползунками: медиа, звонок и уведомления. Беззвучный режим и DND независимы.");
-        TextView disclaimer=text("LSPosed получает жесты и системный порядок недавних задач из MIUI Home/SystemUI, если прошивка поддерживает эти хуки. При отсутствии прав доступен резерв через статистику использования. Системные разрешения на наложение и режим «Не беспокоить» всё ещё нужны.",12,muted);extra.addView(disclaimer);
+        TextView disclaimer=text("LSPosed пассивно отслеживает сторону обычного свайпа «Назад» в MIUI Home/SystemUI. Сам свайп больше не открывает панель и не перехватывается. Список недавних задач и системные разрешения зависят от прошивки.",12,muted);extra.addView(disclaimer);
     }
     private void addRangeSlider(LinearLayout parent,String title,String description,
                                 String key,int min,int max,int defaultValue,String suffix){
