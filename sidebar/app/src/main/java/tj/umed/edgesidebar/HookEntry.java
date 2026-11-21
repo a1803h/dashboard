@@ -149,7 +149,7 @@ public final class HookEntry implements IXposedHookLoadPackage {
             long now=SystemClock.elapsedRealtime();
             if(now-lastSentElapsed>650){
                 lastSentElapsed=now;
-                sendGesture(context,Math.round(gesture.lastY));
+                sendGesture(context,Math.round(gesture.lastY),gesture.startX>=context.getResources().getDisplayMetrics().widthPixels/2f);
             }
         };
         gesture.pending=r;
@@ -169,10 +169,12 @@ public final class HookEntry implements IXposedHookLoadPackage {
         }catch(Throwable ignored){}
     }
 
-    private static void sendGesture(Context context,int rawY){
+    private static void sendGesture(Context context,int rawY,boolean fromRight){
         Intent event=new Intent(ACTION);
         event.setPackage(TARGET_APP);
         event.putExtra("rawY",rawY);
+        // The down-point is authoritative, not the app's fixed left/right setting.
+        event.putExtra("gesture_from_right",fromRight);
         ArrayList<String> recent=readRecentTasks(context);
         event.putExtra("recents",recent.toArray(new String[0]));
         try{context.sendBroadcast(event);}catch(Throwable ignored){}
