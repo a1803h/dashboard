@@ -32,13 +32,14 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public final class HookEntry implements IXposedHookLoadPackage {
     private static final String TARGET_APP="tj.umed.edgesidebar.lsposed";
     private static final String ACTION="tj.umed.edgesidebar.lsposed.ACTION_HOOK_GESTURE";
+    private static final String ACTION_BACK_SIDE="tj.umed.edgesidebar.lsposed.ACTION_LAST_BACK_SIDE";
     private static final WeakHashMap<Object,Gesture> state=new WeakHashMap<>();
     private static volatile long lastSentElapsed=0;
 
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private static final class Gesture {
         float startX,startY,lastInward,lastY;
-        boolean edge,candidate,triggered;
+        boolean edge,candidate,triggered,sideRecorded;
         Runnable pending;
         Gesture(float x,float y,boolean edge){
             startX=x;startY=y;lastY=y;this.edge=edge;
@@ -114,6 +115,12 @@ public final class HookEntry implements IXposedHookLoadPackage {
                 return;
             }
             if(inward>=32*density){
+                // Record the direction of every recognized Back swipe, even when
+                // the user releases immediately and no sidebar is triggered.
+                if(!g.sideRecorded){
+                    g.sideRecorded=true;
+                    sendBackSide(context,g.startX>=screenWidth/2f);
+                }
                 if(!g.candidate){
                     g.candidate=true;
                     g.lastInward=inward;
@@ -167,6 +174,13 @@ public final class HookEntry implements IXposedHookLoadPackage {
                 else if(result==void.class)p.setResult(null);
             }
         }catch(Throwable ignored){}
+    }
+
+    private static void sendBackSide(Context context,boolean fromRight){
+        Intent update=new Intent(ACTION_BACK_SIDE);
+        update.setPackage(TARGET_APP);
+        update.putExtra("back_from_right",fromRight);
+        try{context.sendBroadcast(update);}catch(Throwable ignored){}
     }
 
     private static void sendGesture(Context context,int rawY,boolean fromRight){
