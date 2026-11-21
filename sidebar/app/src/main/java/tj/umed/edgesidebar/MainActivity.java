@@ -65,7 +65,8 @@ public class MainActivity extends Activity {
         TextView sub=text("Панель громкости · приложения · жесты",13,muted);sub.setPadding(0,dp(this,4),0,dp(this,22));root.addView(sub);
         LinearLayout g=group();label(g,"Работа панели","Значок для открытия остаётся доступным независимо от настройки жестов.");
         switchRow(g,"Включить панель","Плавающий значок и сервис", "enabled",false);
-        switchRow(g,"Запуск жестом","Свайп от левого или правого края в других приложениях","gesture",true);
+        switchRow(g,"Запуск жестом LSPosed","Удержать палец на краю ~350 мс и потянуть внутрь","gesture",true);
+        switchRow(g,"Запасная область жеста","Если LSPosed-хук недоступен: отдельная область на краю, может мешать жесту «Назад»","edge_overlay_fallback",false);
         switchRow(g,"Фиксированная высота","Иначе появляется рядом с точкой начала жеста","fixed",false);
         switchRow(g,"Расположить справа","Выключено — слева","right",false);
         LinearLayout apps=group();label(apps,"Приложения","Закреплённые приложения всегда в списке. Остальные сортируются по последнему открытию без повторов.");
@@ -73,11 +74,13 @@ public class MainActivity extends Activity {
         TextView tip=text("Удержание иконки в панели закрепляет или открепляет приложение. Список прокручивается.",12,muted);apps.addView(tip);
         LinearLayout rights=group();label(rights,"Разрешения","Нужно предоставить вручную в Android.");
         addButton(rights,"Поверх других окон  "+(Settings.canDrawOverlays(this)?"✓":"—"),this::askOverlay);
-        addButton(rights,"История запуска  "+(hasUsageAccess()?"✓":"—"),()->{startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));});
+        addButton(rights,"История запуска (резерв)  "+(hasUsageAccess()?"✓":"—"),()->{startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));});
+        long hookedAt=prefs.getLong("hook_active_at",0);
+        label(rights,"LSPosed: "+(hookedAt>0?"получены жесты":"ожидание первого жеста"),"Активируйте модуль и отметьте com.miui.home и com.android.systemui; затем перезагрузите устройство.");
         NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         addButton(rights,"Не беспокоить  "+(nm.isNotificationPolicyAccessGranted()?"✓":"—"),this::askDnd);
         LinearLayout extra=group();label(extra,"Особенности","Три точки панели открывают отдельные ползунки громкости и системные настройки звука. Режим без звука и «Не беспокоить» независимы.");
-        TextView disclaimer=text("Важно: открытый Android API не позволяет точно читать системный экран Recents и перехватывать настоящий жест «Назад». Панель использует историю открытия приложений и отдельную область жеста у края.",12,muted);extra.addView(disclaimer);
+        TextView disclaimer=text("LSPosed получает жесты и системный порядок недавних задач из MIUI Home/SystemUI, если прошивка поддерживает эти хуки. При отсутствии прав доступен резерв через статистику использования. Системные разрешения на наложение и режим «Не беспокоить» всё ещё нужны.",12,muted);extra.addView(disclaimer);
     }
     private void startPanel() {
         if(!Settings.canDrawOverlays(this))return;
