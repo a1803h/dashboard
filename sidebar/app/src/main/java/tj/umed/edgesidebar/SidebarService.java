@@ -74,7 +74,7 @@ public class SidebarService extends Service {
         tab.addView(arrow,new LinearLayout.LayoutParams(dp(26),dp(42)));
         tab.setContentDescription("Открыть Edge Sidebar");
         tab.setOnClickListener(v->showPanel(true,screenH()/2));
-        try{iconView=tab;wm.addView(iconView,params(dp(26),dp(42),dp(1),screenH()/2-dp(21)));}catch(Exception ignored){iconView=null;}
+        try{iconView=tab;wm.addView(iconView,params(dp(26),dp(42),dp(22),screenH()/2-dp(21)));}catch(Exception ignored){iconView=null;}
         if(prefs.getBoolean("gesture",true)){
             View stripe=new View(this){
                 private float sx,sy;
