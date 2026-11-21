@@ -5,16 +5,9 @@ import android.app.Application;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.os.SystemClock;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.UserHandle;
 import android.view.MotionEvent;
-import android.view.View;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.WeakHashMap;
 
@@ -25,173 +18,116 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * LSPosed 1.9.2 legacy Xposed API module.
- * Deliberately avoids hooking global permission checks or Android services.
- * If a ROM-specific method is absent, the target process continues unchanged.
+ * Passive LSPosed gesture observer.
+ * Records which edge initiated a normal Back swipe.
+ * Never shows a sidebar, consumes the gesture or changes its result.
  */
 public final class HookEntry implements IXposedHookLoadPackage {
     private static final String TARGET_APP="tj.umed.edgesidebar.lsposed";
-    private static final String ACTION="tj.umed.edgesidebar.lsposed.ACTION_HOOK_GESTURE";
     private static final String ACTION_BACK_SIDE="tj.umed.edgesidebar.lsposed.ACTION_LAST_BACK_SIDE";
-    private static final WeakHashMap<Object,Gesture> state=new WeakHashMap<>();
-    private static volatile long lastSentElapsed=0;
+    private static final WeakHashMap<Object,Gesture> gestures=new WeakHashMap<>();
 
-    private static final Handler MAIN=new Handler(Looper.getMainLooper());
-    private static final class Gesture {
-        float startX,startY,lastInward,lastY;
-        boolean edge,candidate,triggered,sideRecorded;
-        Runnable pending;
-        Gesture(float x,float y,boolean edge){
-            startX=x;startY=y;lastY=y;this.edge=edge;
+    private static class Gesture {
+        final float startX,startY;
+        final boolean fromRight,edge;
+        boolean recorded;
+        Gesture(float x,float y,boolean right,boolean edge){
+            startX=x;startY=y;fromRight=right;this.edge=edge;
         }
     }
 
-    @Override public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lp) {
-        if(!"com.miui.home".equals(lp.packageName) && !"com.android.systemui".equals(lp.packageName))return;
-        XposedHelpers.findAndHookMethod(Application.class,"attach",Context.class,new XC_MethodHook(){
-            @Override protected void afterHookedMethod(MethodHookParam param){
-                Context ctx=(Context)param.args[0];
-                if(ctx==null || !lp.packageName.equals(ctx.getPackageName()))return;
-                try{install(ctx,lp);}catch(Throwable t){XposedBridge.log("EdgeSidebar hook install: "+t);}
-            }
-        });
-    }
-
-    private static void install(Context context,XC_LoadPackage.LoadPackageParam lp) {
-        if("com.miui.home".equals(lp.packageName)){
-            // MIUI 14 / HyperOS launcher gesture path, ROM-dependent.
-            hookMethod(context,lp.classLoader,"com.miui.home.recents.GestureStubView","onTouchEvent");
-        }else{
-            // AOSP / vendor SystemUI back-gesture path; missing classes are harmless.
-            hookMethod(context,lp.classLoader,"com.android.systemui.navigationbar.gestural.EdgeBackGestureHandler","onMotionEvent");
-            hookMethod(context,lp.classLoader,"com.android.systemui.statusbar.phone.EdgeBackGestureHandler","onMotionEvent");
-        }
-    }
-
-    private static void hookMethod(Context ctx,ClassLoader loader,String className,String methodName) {
-        Class<?> target=XposedHelpers.findClassIfExists(className,loader);
-        if(target==null)return;
-        try{
-            XposedBridge.hookAllMethods(target,methodName,new XC_MethodHook(){
-                @Override protected void beforeHookedMethod(MethodHookParam p){
-                    if(p.args.length==0 || !(p.args[0] instanceof MotionEvent))return;
-                    process(ctx,p,(MotionEvent)p.args[0]);
+    @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lp){
+        if(!"com.miui.home".equals(lp.packageName) &&
+           !"com.android.systemui".equals(lp.packageName))return;
+        XposedHelpers.findAndHookMethod(Application.class,"attach",Context.class,
+            new XC_MethodHook(){
+                @Override protected void afterHookedMethod(MethodHookParam p){
+                    Context ctx=(Context)p.args[0];
+                    if(ctx==null || !lp.packageName.equals(ctx.getPackageName()))return;
+                    try{
+                        if("com.miui.home".equals(lp.packageName)){
+                            hookTouch(ctx,lp.classLoader,"com.miui.home.recents.GestureStubView","onTouchEvent");
+                        }else{
+                            hookTouch(ctx,lp.classLoader,
+                                "com.android.systemui.navigationbar.gestural.EdgeBackGestureHandler",
+                                "onMotionEvent");
+                            hookTouch(ctx,lp.classLoader,
+                                "com.android.systemui.statusbar.phone.EdgeBackGestureHandler",
+                                "onMotionEvent");
+                        }
+                    }catch(Throwable t){XposedBridge.log("EdgeSidebar Back observer: "+t);}
                 }
             });
-            XposedBridge.log("EdgeSidebar: attached "+className+"."+methodName);
-        }catch(Throwable t){XposedBridge.log("EdgeSidebar failed "+className+": "+t);}
     }
 
-    private static void process(Context context, XC_MethodHook.MethodHookParam p, MotionEvent motion) {
-        try {
-            int event=motion.getActionMasked();
-            Object owner=p.thisObject;
-            int screenWidth=context.getResources().getDisplayMetrics().widthPixels;
-            float density=context.getResources().getDisplayMetrics().density;
-            float edgeSize=65*density;
-            if(event==MotionEvent.ACTION_DOWN){
-                float x=motion.getRawX(),y=motion.getRawY();
-                boolean edge=x<=edgeSize||x>=screenWidth-edgeSize;
-                synchronized(state){state.put(owner,new Gesture(x,y,edge));}
+    private static void hookTouch(Context ctx,ClassLoader loader,String type,String method){
+        Class<?> cls=XposedHelpers.findClassIfExists(type,loader);
+        if(cls==null)return;
+        try{
+            XposedBridge.hookAllMethods(cls,method,new XC_MethodHook(){
+                @Override protected void beforeHookedMethod(MethodHookParam p){
+                    if(p.args.length>0 && p.args[0] instanceof MotionEvent)
+                        inspect(ctx,p.thisObject,(MotionEvent)p.args[0]);
+                }
+            });
+            XposedBridge.log("EdgeSidebar observing Back side via "+type);
+        }catch(Throwable t){
+            XposedBridge.log("EdgeSidebar Back observer failed "+type+": "+t);
+        }
+    }
+
+    private static void inspect(Context context,Object owner,MotionEvent ev){
+        try{
+            final int action=ev.getActionMasked();
+            final float density=context.getResources().getDisplayMetrics().density;
+            final int width=context.getResources().getDisplayMetrics().widthPixels;
+            if(action==MotionEvent.ACTION_DOWN){
+                float x=ev.getRawX();
+                boolean fromRight=x>=width/2f;
+                boolean edge=x<=65*density || x>=width-65*density;
+                synchronized(gestures){
+                    gestures.put(owner,new Gesture(x,ev.getRawY(),fromRight,edge));
+                }
                 return;
             }
             Gesture g;
-            synchronized(state){g=state.get(owner);}
-            if(g==null||!g.edge)return;
-            if(event==MotionEvent.ACTION_UP||event==MotionEvent.ACTION_CANCEL){
-                cancelPending(g);
-                synchronized(state){state.remove(owner);}
-                if(g.triggered)consume(p); // Sidebar gesture replaces normal back only after hold.
+            synchronized(gestures){g=gestures.get(owner);}
+            if(g==null)return;
+            if(action==MotionEvent.ACTION_CANCEL){
+                synchronized(gestures){gestures.remove(owner);}
                 return;
             }
-            if(event!=MotionEvent.ACTION_MOVE)return;
-            if(g.triggered){consume(p);return;}
-            float dx=motion.getRawX()-g.startX;
-            float dy=motion.getRawY()-g.startY;
-            float inward=(g.startX<screenWidth/2f)?dx:-dx;
-            if(Math.abs(dy)>75*density || inward<0){
-                cancelPending(g);
-                g.candidate=false;
+            if(!g.edge){
+                if(action==MotionEvent.ACTION_UP){
+                    synchronized(gestures){gestures.remove(owner);}
+                }
                 return;
             }
-            if(inward>=32*density){
-                // Record the direction of every recognized Back swipe, even when
-                // the user releases immediately and no sidebar is triggered.
-                if(!g.sideRecorded){
-                    g.sideRecorded=true;
-                    sendBackSide(context,g.startX>=screenWidth/2f);
+            if(action==MotionEvent.ACTION_MOVE || action==MotionEvent.ACTION_UP){
+                float inward=g.fromRight?g.startX-ev.getRawX():ev.getRawX()-g.startX;
+                float vertical=Math.abs(ev.getRawY()-g.startY);
+                if(!g.recorded && inward>=24*density && vertical<=70*density){
+                    g.recorded=true;
+                    // Sent on the first inward move; does not depend on a long press.
+                    sendSide(context,g.fromRight);
                 }
-                if(!g.candidate){
-                    g.candidate=true;
-                    g.lastInward=inward;
-                    g.lastY=motion.getRawY();
-                    scheduleHold(context,owner,g);
-                }else if(Math.abs(inward-g.lastInward)>20*density){
-                    // Finger is still dragging: hold starts when it pauses.
-                    cancelPending(g);
-                    g.lastInward=inward;
-                    g.lastY=motion.getRawY();
-                    scheduleHold(context,owner,g);
+                if(action==MotionEvent.ACTION_UP){
+                    synchronized(gestures){gestures.remove(owner);}
                 }
-            }else if(g.candidate && inward<18*density){
-                cancelPending(g);
-                g.candidate=false;
             }
         }catch(Throwable ignored){
-            // Hooks must never crash the launcher or SystemUI.
+            // Failure must not affect Xiaomi navigation.
         }
     }
 
-    private static void cancelPending(Gesture gesture){
-        Runnable work=gesture.pending;
-        if(work!=null){MAIN.removeCallbacks(work);gesture.pending=null;}
-    }
-    private static void scheduleHold(Context context,Object owner,Gesture gesture){
-        Runnable r=()->{
-            synchronized(state){
-                if(state.get(owner)!=gesture||!gesture.candidate||gesture.triggered)return;
-                gesture.triggered=true;
-                gesture.pending=null;
-            }
-            long now=SystemClock.elapsedRealtime();
-            if(now-lastSentElapsed>650){
-                lastSentElapsed=now;
-                sendGesture(context,Math.round(gesture.lastY),gesture.startX>=context.getResources().getDisplayMetrics().widthPixels/2f);
-            }
-        };
-        gesture.pending=r;
-        // Swipe to start Back, then pause with finger still down. Unlike the
-        // old code, a short fast swipe is not marked aborted and no new MOVE
-        // events are required during the hold.
-        MAIN.postDelayed(r,330);
-    }
-
-    private static void consume(XC_MethodHook.MethodHookParam p){
-        try{
-            if(p.method instanceof Method){
-                Class<?> result=((Method)p.method).getReturnType();
-                if(result==boolean.class || result==Boolean.class)p.setResult(Boolean.TRUE);
-                else if(result==void.class)p.setResult(null);
-            }
-        }catch(Throwable ignored){}
-    }
-
-    private static void sendBackSide(Context context,boolean fromRight){
-        Intent update=new Intent(ACTION_BACK_SIDE);
-        update.setPackage(TARGET_APP);
-        update.putExtra("back_from_right",fromRight);
-        try{context.sendBroadcast(update);}catch(Throwable ignored){}
-    }
-
-    private static void sendGesture(Context context,int rawY,boolean fromRight){
-        Intent event=new Intent(ACTION);
-        event.setPackage(TARGET_APP);
-        event.putExtra("rawY",rawY);
-        // The down-point is authoritative, not the app's fixed left/right setting.
-        event.putExtra("gesture_from_right",fromRight);
+    private static void sendSide(Context context,boolean fromRight){
+        Intent intent=new Intent(ACTION_BACK_SIDE);
+        intent.setPackage(TARGET_APP);
+        intent.putExtra("back_from_right",fromRight);
+        // Preserve system task ordering used by the sidebar when it is available.
         ArrayList<String> recent=readRecentTasks(context);
-        event.putExtra("recents",recent.toArray(new String[0]));
-        try{context.sendBroadcast(event);}catch(Throwable ignored){}
+        if(!recent.isEmpty())intent.putExtra("recents",recent.toArray(new String[0]));
+        try{context.sendBroadcast(intent);}catch(Throwable ignored){}
     }
 
     private static ArrayList<String> readRecentTasks(Context context){
