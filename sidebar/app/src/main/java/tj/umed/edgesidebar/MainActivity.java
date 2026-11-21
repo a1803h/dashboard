@@ -87,7 +87,7 @@ public class MainActivity extends Activity {
         switchRow(g,"Запуск жестом LSPosed","Свайп назад, затем удержание ~300 мс","gesture",true);
         switchRow(g,"Запасная область жеста","Если LSPosed-хук недоступен: отдельная область на краю, может мешать жесту «Назад»","edge_overlay_fallback",false);
         switchRow(g,"Фиксированная высота","Иначе появляется рядом с точкой начала жеста","fixed",false);
-        switchRow(g,"Сторона запуска по иконке","Выключено — слева; включено — справа. При запуске жестом сторона определяется автоматически.","right",false);
+        switchRow(g,"Сторона до первого свайпа назад","При запуске сайдбар использует сторону последнего свайпа «Назад». Здесь выбирается начальная сторона, если свайпов ещё не было.","right",false);
         LinearLayout scaleGroup=group();
         label(scaleGroup,"Масштаб панели","Пропорционально изменяет всю панель, иконки, кнопки, отступы и ползунок громкости.");
         TextView scaleValue=text("",15,Color.WHITE);
@@ -119,6 +119,10 @@ public class MainActivity extends Activity {
             "app_scale_percent",60,160,100,"%");
         addRangeSlider(geometry,"Отступ от края","Расстояние от левого или правого края до сайдбара.",
             "edge_offset_dp",0,100,4," dp");
+        LinearLayout visibility=group();
+        label(visibility,"Время показа","Отсчёт обновляется при взаимодействии с панелью. При касании за пределами панели она закрывается сразу.");
+        addRangeSlider(visibility,"Автоматическое скрытие","0 секунд — не скрывать автоматически; от 1 до 60 секунд — задержка закрытия.",
+            "dismiss_after_seconds",0,60,12," с");
         LinearLayout apps=group();label(apps,"Приложения","Закреплённые приложения всегда в списке. Остальные сортируются по последнему открытию без повторов.");
         addButton(apps,"Выбрать закреплённые приложения",this::choosePins);
         TextView tip=text("Удержание иконки в панели закрепляет или открепляет приложение. Список прокручивается.",12,muted);apps.addView(tip);
@@ -129,7 +133,7 @@ public class MainActivity extends Activity {
         label(rights,"LSPosed: "+(hookedAt>0?"получены жесты":"ожидание первого жеста"),"Активируйте модуль и отметьте com.miui.home и com.android.systemui; затем перезагрузите устройство.");
         NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         addButton(rights,"Не беспокоить  "+(nm.isNotificationPolicyAccessGranted()?"✓":"—"),this::askDnd);
-        LinearLayout extra=group();label(extra,"Особенности","Три точки открывают штатную панель громкости MIUI. Беззвучный режим и «Не беспокоить» имеют независимые состояния.");
+        LinearLayout extra=group();label(extra,"Особенности","Три точки открывают первоначальный диалог громкости с тремя ползунками: медиа, звонок и уведомления. Беззвучный режим и DND независимы.");
         TextView disclaimer=text("LSPosed получает жесты и системный порядок недавних задач из MIUI Home/SystemUI, если прошивка поддерживает эти хуки. При отсутствии прав доступен резерв через статистику использования. Системные разрешения на наложение и режим «Не беспокоить» всё ещё нужны.",12,muted);extra.addView(disclaimer);
     }
     private void addRangeSlider(LinearLayout parent,String title,String description,
