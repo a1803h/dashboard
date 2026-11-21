@@ -7,5 +7,4 @@ android {
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
 
-repositories { maven { url = uri("https://repository-cdn.liferay.com/nexus/content/repositories/gradle-plugins/") } }
 dependencies { compileOnly("de.robv.android.xposed:api:82") }
