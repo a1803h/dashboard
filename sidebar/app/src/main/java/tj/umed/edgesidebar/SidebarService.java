@@ -23,9 +23,15 @@ public class SidebarService extends Service {
     private FrameLayout muteButton,dndButton;
     private ImageView muteImage,dndImage;
     public static final String ACTION_HOOK_GESTURE="tj.umed.edgesidebar.lsposed.ACTION_HOOK_GESTURE";
+    public static final String ACTION_LAST_BACK_SIDE="tj.umed.edgesidebar.lsposed.ACTION_LAST_BACK_SIDE";
     private long lastHookGesture=0;
     private final BroadcastReceiver hookCommands=new BroadcastReceiver(){
       @Override public void onReceive(Context context,Intent intent){
+        if(ACTION_LAST_BACK_SIDE.equals(intent.getAction())){
+            boolean fromRight=intent.getBooleanExtra("back_from_right",right());
+            prefs.edit().putBoolean("last_back_right",fromRight).apply();
+            return;
+        }
         if(!ACTION_HOOK_GESTURE.equals(intent.getAction()) || !prefs.getBoolean("enabled",false) || !prefs.getBoolean("gesture",true))return;
         if(SystemClock.elapsedRealtime()-lastHookGesture<650)return;
         lastHookGesture=SystemClock.elapsedRealtime();
@@ -38,9 +44,9 @@ public class SidebarService extends Service {
           prefs.edit().putString("hook_recents",sb.toString()).putLong("hook_recents_at",System.currentTimeMillis()).putLong("hook_active_at",System.currentTimeMillis()).apply();
         }else prefs.edit().putLong("hook_active_at",System.currentTimeMillis()).apply();
         int rawY=intent.getIntExtra("rawY",screenH()/2);
-        // The side comes from the origin of the actual Back gesture.
-        // Do not use the configured launcher-icon side here.
-        boolean fromRight=intent.getBooleanExtra("gesture_from_right",right());
+        // Use the last recognized Back swipe, including ordinary quick swipes.
+        boolean fromRight=prefs.getBoolean("last_back_right",
+            intent.getBooleanExtra("gesture_from_right",right()));
         showPanel(false,Math.max(dp(25),Math.min(rawY,screenH()-dp(25))),fromRight);
       }
     };
@@ -62,6 +68,7 @@ public class SidebarService extends Service {
         if(!prefs.contains("dnd_enabled"))
             prefs.edit().putBoolean("dnd_enabled",notifications.getCurrentInterruptionFilter()!=NotificationManager.INTERRUPTION_FILTER_ALL).apply();
         IntentFilter filter=new IntentFilter(ACTION_HOOK_GESTURE);
+        filter.addAction(ACTION_LAST_BACK_SIDE);
         if(Build.VERSION.SDK_INT>=33)registerReceiver(hookCommands,filter,Context.RECEIVER_EXPORTED);
         else registerReceiver(hookCommands,filter);
     }
@@ -100,6 +107,9 @@ public class SidebarService extends Service {
         wm.getDefaultDisplay().getRealSize(p);return p.y;
     }
     private boolean right(){return prefs.getBoolean("right",false);}
+    private boolean lastBackRight(){
+        return prefs.getBoolean("last_back_right",right());
+    }
     private WindowManager.LayoutParams params(int width,int height,int x,int y){
         return params(width,height,x,y,right());
     }
@@ -142,7 +152,8 @@ public class SidebarService extends Service {
                         float dx=ev.getRawX()-startX;
                         if((fromRight && dx<-dp(26))||(!fromRight && dx>dp(26))){
                             opened=true;
-                            showPanel(false,(int)startY,fromRight);
+                            prefs.edit().putBoolean("last_back_right",fromRight).apply();
+                            showPanel(false,(int)startY,lastBackRight());
                         }
                         return true;
                     default:return true;
@@ -158,14 +169,18 @@ public class SidebarService extends Service {
         TextView t=glyph(symbol,23,textColor);t.setBackground(shape(bgColor,16));
         t.setOnClickListener(v->{touch();call.run();});return t;
     }
-    private void touch(){handler.removeCallbacks(dismiss);handler.postDelayed(dismiss,12000);}
+    private void touch(){
+        handler.removeCallbacks(dismiss);
+        int seconds=Math.min(120,Math.max(0,prefs.getInt("dismiss_after_seconds",12)));
+        if(panelOpen && seconds>0)handler.postDelayed(dismiss,seconds*1000L);
+    }
     private void hidePanel(){
         handler.removeCallbacks(dismiss);
         remove(panelView);panelView=null;panelOpen=false;
         rebuildHandles();
     }
     private void showPanel(boolean iconLaunch,int y){
-        showPanel(iconLaunch,y,right());
+        showPanel(iconLaunch,y,lastBackRight());
     }
     private void showPanel(boolean iconLaunch,int y,boolean fromRight){
         handler.removeCallbacks(dismiss);
@@ -180,7 +195,15 @@ public class SidebarService extends Service {
         final int fullWidth=appWidth+volWidth+gap;
         final int fullHeight=Math.max(appHeight,volHeight);
 
-        LinearLayout outer=new LinearLayout(this);
+        LinearLayout outer=new LinearLayout(this){
+            @Override public boolean dispatchTouchEvent(MotionEvent ev){
+                if(ev.getActionMasked()==MotionEvent.ACTION_OUTSIDE){
+                    handler.post(()->hidePanel());
+                    return true;
+                }
+                return super.dispatchTouchEvent(ev);
+            }
+        };
         outer.setOrientation(LinearLayout.HORIZONTAL);
         outer.setClipChildren(false);
         LinearLayout apps=makeAppRail();
@@ -202,7 +225,10 @@ public class SidebarService extends Service {
         int edge=Math.min(preferredEdge,Math.max(0,screenW()-fullWidth));
         try{
             panelView=outer;
-            wm.addView(panelView,params(fullWidth,fullHeight,edge,top,fromRight));
+            WindowManager.LayoutParams window=params(fullWidth,fullHeight,edge,top,fromRight);
+            // Outside taps pass through, but the overlay receives ACTION_OUTSIDE.
+            window.flags |= WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
+            wm.addView(panelView,window);
             touch();
         }catch(Exception ignored){
             panelView=null;panelOpen=false;rebuildHandles();
@@ -378,21 +404,48 @@ public class SidebarService extends Service {
         try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
         catch(Exception ignored){}
     }
-    /** Delegates to MIUI's own volume UI. The OEM panel owns the stream sliders. */
+    /** Original three-slider volume dialog as in the initial Edge Sidebar build. */
     private void showExpandedSound(){
-        hidePanel();
-        handler.postDelayed(()->{
-            try{
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
-                    AudioManager.ADJUST_SAME,AudioManager.FLAG_SHOW_UI);
-            }catch(Exception error){
+        LinearLayout stack=new LinearLayout(this);
+        stack.setPadding(dp(20),dp(10),dp(20),dp(8));
+        stack.setOrientation(LinearLayout.VERTICAL);
+        addVolumeRow(stack,"Медиа",AudioManager.STREAM_MUSIC);
+        addVolumeRow(stack,"Звонок",AudioManager.STREAM_RING);
+        addVolumeRow(stack,"Уведомления",AudioManager.STREAM_NOTIFICATION);
+        AlertDialog dialog=new AlertDialog.Builder(
+            new ContextThemeWrapper(this,android.R.style.Theme_Material_Light_Dialog_Alert))
+            .setTitle("Громкость").setView(stack)
+            .setNeutralButton("Настройки звука",(d,w)->{
+                hidePanel();
                 try{
-                    Intent setting=new Intent(Settings.ACTION_SOUND_SETTINGS);
-                    setting.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(setting);
+                    startActivity(new Intent(Settings.ACTION_SOUND_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 }catch(Exception ignored){}
+            })
+            .setPositiveButton("Готово",null).create();
+        if(dialog.getWindow()!=null)
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        try{dialog.show();}
+        catch(Exception e){
+            Toast.makeText(this,"Невозможно открыть настройки громкости",Toast.LENGTH_SHORT).show();
+        }
+    }
+    private void addVolumeRow(LinearLayout stack,String name,int stream){
+        TextView label=glyph(name,15,Color.DKGRAY);
+        label.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);
+        stack.addView(label);
+        SeekBar bar=new SeekBar(this);
+        bar.setMax(audio.getStreamMaxVolume(stream));
+        bar.setProgress(audio.getStreamVolume(stream));
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar s,int value,boolean user){
+                if(user)try{audio.setStreamVolume(stream,value,0);}
+                catch(SecurityException e){requireDnd();}
             }
-        },65);
+            public void onStartTrackingTouch(SeekBar s){}
+            public void onStopTrackingTouch(SeekBar s){}
+        });
+        stack.addView(bar,new LinearLayout.LayoutParams(dp(260),dp(42)));
     }
     private final class VolumeSlider extends View {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
