@@ -6,6 +6,9 @@ on:
       - 'sidebar/**'
       - '.github/workflows/edge-sidebar-lsposed.yml'
   workflow_dispatch:
+concurrency:
+  group: sidebar-lsposed-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   apk:
     runs-on: ubuntu-latest
