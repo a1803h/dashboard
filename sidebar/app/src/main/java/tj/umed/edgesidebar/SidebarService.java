@@ -244,7 +244,9 @@ public class SidebarService extends Service {
         settings.setContentDescription("Настройки Edge Sidebar");
         settings.setOnClickListener(v->{
             hidePanel();
-            startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            startActivity(new Intent(this,MainActivity.class)
+                .putExtra(MainActivity.EXTRA_SETTINGS,true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         });
         stack.addView(settings,new LinearLayout.LayoutParams(fig(110),fig(42)));
         base.addView(scroll,new LinearLayout.LayoutParams(-1,-1));
@@ -267,20 +269,22 @@ public class SidebarService extends Service {
         rail.addView(slider,new LinearLayout.LayoutParams(fig(142),fig(554)));
         View gap1=new View(this);
         rail.addView(gap1,new LinearLayout.LayoutParams(1,fig(29)));
-        boolean muteActive=audio.getRingerMode()!=AudioManager.RINGER_MODE_NORMAL;
+        boolean muteActive=prefs.getBoolean("mute_enabled",false);
         FrameLayout mute=createFigmaButton(muteActive?R.drawable.ic_figma_mute:R.drawable.ic_figma_bell,
             muteActive, muteActive?44f:45.5f, 47f,"Режим без звука",this::toggleRinger);
+        muteButton=mute;muteImage=(ImageView)mute.getChildAt(0);
         rail.addView(mute,new LinearLayout.LayoutParams(fig(142),fig(95)));
         rail.addView(new View(this),new LinearLayout.LayoutParams(1,fig(29)));
-        boolean dndActive=notifications.getCurrentInterruptionFilter()!=NotificationManager.INTERRUPTION_FILTER_ALL;
+        boolean dndActive=prefs.getBoolean("dnd_enabled",false);
         FrameLayout dnd=createFigmaButton(R.drawable.ic_figma_moon,dndActive,
             42f,45f,"Не беспокоить",this::toggleDnd);
+        dndButton=dnd;dndImage=(ImageView)dnd.getChildAt(0);
         rail.addView(dnd,new LinearLayout.LayoutParams(fig(142),fig(95)));
         return rail;
     }
     private FrameLayout createFigmaButton(int drawable,boolean active,float iconWidth,float iconHeight,String label,Runnable action){
         FrameLayout frame=new FrameLayout(this);
-        frame.setBackground(shape(active?FIGMA_BLUE:FIGMA_IDLE,15));
+        frame.setBackground(MainActivity.round(active?FIGMA_BLUE:FIGMA_IDLE,fig(42)));
         ImageView icon=new ImageView(this);
         icon.setImageResource(drawable);
         icon.setScaleType(ImageView.ScaleType.FIT_XY);
@@ -291,20 +295,44 @@ public class SidebarService extends Service {
         frame.setOnClickListener(v->{touch();action.run();});
         return frame;
     }
+    /** Update pixels in existing window. Never remove or re-add the sidebar on a mode click. */
+    private void renderModeButtons(){
+        boolean mute=prefs.getBoolean("mute_enabled",false);
+        boolean dnd=prefs.getBoolean("dnd_enabled",false);
+        if(muteButton!=null && muteImage!=null){
+            muteButton.setBackground(MainActivity.round(mute?FIGMA_BLUE:FIGMA_IDLE,fig(42)));
+            muteImage.setImageResource(mute?R.drawable.ic_figma_mute:R.drawable.ic_figma_bell);
+            muteImage.setColorFilter(mute?Color.WHITE:FIGMA_ICON_IDLE);
+            FrameLayout.LayoutParams icon=(FrameLayout.LayoutParams)muteImage.getLayoutParams();
+            icon.width=fig(mute?44f:45.5f);icon.height=fig(47);icon.gravity=Gravity.CENTER;
+            muteImage.setLayoutParams(icon);
+        }
+        if(dndButton!=null && dndImage!=null){
+            dndButton.setBackground(MainActivity.round(dnd?FIGMA_BLUE:FIGMA_IDLE,fig(42)));
+            dndImage.setImageResource(R.drawable.ic_figma_moon);
+            dndImage.setColorFilter(dnd?Color.WHITE:FIGMA_ICON_IDLE);
+        }
+    }
     private void toggleRinger(){
+        boolean mute=!prefs.getBoolean("mute_enabled",false);
         try{
-            int next=audio.getRingerMode()==AudioManager.RINGER_MODE_NORMAL?AudioManager.RINGER_MODE_SILENT:AudioManager.RINGER_MODE_NORMAL;
-            audio.setRingerMode(next);
-            showPanel(false,lastY);
+            audio.setRingerMode(mute?AudioManager.RINGER_MODE_SILENT:AudioManager.RINGER_MODE_NORMAL);
+            prefs.edit().putBoolean("mute_enabled",mute).apply();
+            renderModeButtons();
+            touch();
         }catch(SecurityException e){requireDnd();}
     }
     private void toggleDnd(){
         if(!notifications.isNotificationPolicyAccessGranted()){requireDnd();return;}
+        boolean enabled=!prefs.getBoolean("dnd_enabled",false);
         try{
-            int now=notifications.getCurrentInterruptionFilter();
-            notifications.setInterruptionFilter(now==NotificationManager.INTERRUPTION_FILTER_ALL?
+            notifications.setInterruptionFilter(enabled?
                 NotificationManager.INTERRUPTION_FILTER_NONE:NotificationManager.INTERRUPTION_FILTER_ALL);
-            showPanel(false,lastY);
+            prefs.edit().putBoolean("dnd_enabled",enabled).apply();
+            // MIUI may change ringer mode as a DND side-effect.
+            // We deliberately leave mute_enabled and the mute button untouched.
+            renderModeButtons();
+            touch();
         }catch(SecurityException e){requireDnd();}
     }
     private void requireDnd(){
@@ -312,32 +340,21 @@ public class SidebarService extends Service {
         try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
         catch(Exception ignored){}
     }
+    /** Delegates to MIUI's own volume UI. The OEM panel owns the stream sliders. */
     private void showExpandedSound(){
-        LinearLayout stack=new LinearLayout(this);stack.setPadding(dp(20),dp(10),dp(20),dp(8));stack.setOrientation(LinearLayout.VERTICAL);
-        addVolumeRow(stack,"Медиа",AudioManager.STREAM_MUSIC);
-        addVolumeRow(stack,"Звонок",AudioManager.STREAM_RING);
-        addVolumeRow(stack,"Уведомления",AudioManager.STREAM_NOTIFICATION);
-        AlertDialog dialog=new AlertDialog.Builder(new ContextThemeWrapper(this,android.R.style.Theme_Material_Light_Dialog_Alert))
-            .setTitle("Громкость").setView(stack)
-            .setNeutralButton("Настройки звука",(d,w)->{
-                hidePanel();
-                try{startActivity(new Intent(Settings.ACTION_SOUND_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}catch(Exception ignored){}
-            })
-            .setPositiveButton("Готово",null).create();
-        if(dialog.getWindow()!=null)dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
-        try{dialog.show();}catch(Exception e){Toast.makeText(this,"Невозможно открыть настройки громкости",Toast.LENGTH_SHORT).show();}
-    }
-    private void addVolumeRow(LinearLayout stack,String name,int stream){
-        TextView label=glyph(name,15,Color.DKGRAY);label.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);stack.addView(label);
-        SeekBar bar=new SeekBar(this);bar.setMax(audio.getStreamMaxVolume(stream));bar.setProgress(audio.getStreamVolume(stream));
-        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar s,int value,boolean user){
-                if(user)try{audio.setStreamVolume(stream,value,0);}catch(SecurityException e){requireDnd();}
+        hidePanel();
+        handler.postDelayed(()->{
+            try{
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                    AudioManager.ADJUST_SAME,AudioManager.FLAG_SHOW_UI);
+            }catch(Exception error){
+                try{
+                    Intent setting=new Intent(Settings.ACTION_SOUND_SETTINGS);
+                    setting.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(setting);
+                }catch(Exception ignored){}
             }
-            public void onStartTrackingTouch(SeekBar s){}
-            public void onStopTrackingTouch(SeekBar s){}
-        });
-        stack.addView(bar,new LinearLayout.LayoutParams(dp(260),dp(42)));
+        },65);
     }
     private final class VolumeSlider extends View {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
