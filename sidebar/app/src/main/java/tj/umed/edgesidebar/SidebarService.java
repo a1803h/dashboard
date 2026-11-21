@@ -18,6 +18,10 @@ public class SidebarService extends Service {
     private android.content.SharedPreferences prefs;
     private Handler handler=new Handler(Looper.getMainLooper());
     private View iconView,gestureView,gestureViewRight,panelView;
+    // A closing window stays attached just long enough to finish slide+fade.
+    private View closingPanelView;
+    private static final long ENTER_ANIMATION_MS=230L;
+    private static final long EXIT_ANIMATION_MS=180L;
     public static final String ACTION_OPEN_PANEL="tj.umed.edgesidebar.lsposed.OPEN_PANEL";
     public static final String ACTION_REFRESH_CONFIG="tj.umed.edgesidebar.lsposed.REFRESH_CONFIG";
     private FrameLayout muteButton,dndButton;
@@ -148,7 +152,32 @@ public class SidebarService extends Service {
     private void hidePanel(){
         handler.removeCallbacks(dismiss);
         fingerOnPanel=false;
-        remove(panelView);panelView=null;panelOpen=false;
+        if(panelView==null){
+            panelOpen=false;
+            rebuildHandles();
+            return;
+        }
+        final View outgoing=panelView;
+        panelView=null;
+        panelOpen=false;
+        // Never leave an older closing overlay behind during repeated launches.
+        if(closingPanelView!=null && closingPanelView!=outgoing){
+            closingPanelView.animate().cancel();
+            remove(closingPanelView);
+        }
+        closingPanelView=outgoing;
+        outgoing.animate().cancel();
+        outgoing.animate()
+            .translationX(panelRight?dp(64):-dp(64))
+            .alpha(0f)
+            .setDuration(EXIT_ANIMATION_MS)
+            .setInterpolator(new android.view.animation.AccelerateInterpolator(1.1f))
+            .withLayer()
+            .withEndAction(()->{
+                remove(outgoing);
+                if(closingPanelView==outgoing)closingPanelView=null;
+            })
+            .start();
         rebuildHandles();
     }
     private void showPanel(boolean iconLaunch,int y){
@@ -156,9 +185,19 @@ public class SidebarService extends Service {
     }
     private void showPanel(boolean iconLaunch,int y,boolean fromRight){
         handler.removeCallbacks(dismiss);
+        // Cancel any exit still in progress before attaching the new panel.
+        if(closingPanelView!=null){
+            closingPanelView.animate().cancel();
+            remove(closingPanelView);
+            closingPanelView=null;
+        }
         remove(iconView);remove(gestureView);remove(gestureViewRight);
         iconView=null;gestureView=null;gestureViewRight=null;
-        remove(panelView);panelView=null;panelOpen=true;
+        if(panelView!=null){
+            panelView.animate().cancel();
+            remove(panelView);
+        }
+        panelView=null;panelOpen=true;
         fingerOnPanel=false;
         lastY=y;
         panelRight=fromRight;
@@ -216,7 +255,18 @@ public class SidebarService extends Service {
             WindowManager.LayoutParams window=params(fullWidth,fullHeight,edge,top,fromRight);
             // Outside taps pass through, but the overlay receives ACTION_OUTSIDE.
             window.flags |= WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
+            // Left side: slide from left; right side: slide from right.
+            // Fade runs concurrently and the final layout remains pixel-identical.
+            outer.setAlpha(0f);
+            outer.setTranslationX(fromRight?dp(64):-dp(64));
             wm.addView(panelView,window);
+            outer.animate()
+                .translationX(0f)
+                .alpha(1f)
+                .setDuration(ENTER_ANIMATION_MS)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.3f))
+                .withLayer()
+                .start();
             touch();
         }catch(Exception ignored){
             panelView=null;panelOpen=false;rebuildHandles();
@@ -507,8 +557,15 @@ public class SidebarService extends Service {
     }
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);if(panelOpen)hidePanel();else rebuildHandles();}
     @Override public void onDestroy(){
-        handler.removeCallbacks(dismiss);try{unregisterReceiver(backObserver);}catch(Exception ignored){}remove(iconView);remove(gestureView);remove(gestureViewRight);remove(panelView);
-        iconView=null;gestureView=null;gestureViewRight=null;panelView=null;super.onDestroy();
+        handler.removeCallbacks(dismiss);
+        try{unregisterReceiver(backObserver);}catch(Exception ignored){}
+        if(panelView!=null)panelView.animate().cancel();
+        if(closingPanelView!=null)closingPanelView.animate().cancel();
+        remove(iconView);remove(gestureView);remove(gestureViewRight);
+        remove(panelView);remove(closingPanelView);
+        iconView=null;gestureView=null;gestureViewRight=null;
+        panelView=null;closingPanelView=null;
+        super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent){return null;}
 }
