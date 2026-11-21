@@ -6,6 +6,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.SystemClock;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.UserHandle;
 import android.view.MotionEvent;
 import android.view.View;
@@ -33,12 +35,13 @@ public final class HookEntry implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object,Gesture> state=new WeakHashMap<>();
     private static volatile long lastSentElapsed=0;
 
+    private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private static final class Gesture {
-        float startX, startY;
-        long downMillis;
-        boolean aborted, triggered, edge;
-        Gesture(float x,float y,long when,boolean atEdge){
-            startX=x;startY=y;downMillis=when;edge=atEdge;
+        float startX,startY,lastInward,lastY;
+        boolean edge,candidate,triggered;
+        Runnable pending;
+        Gesture(float x,float y,boolean edge){
+            startX=x;startY=y;lastY=y;this.edge=edge;
         }
     }
 
@@ -79,48 +82,81 @@ public final class HookEntry implements IXposedHookLoadPackage {
     }
 
     private static void process(Context context, XC_MethodHook.MethodHookParam p, MotionEvent motion) {
-        try{
+        try {
             int event=motion.getActionMasked();
-            final Object owner=p.thisObject;
+            Object owner=p.thisObject;
             int screenWidth=context.getResources().getDisplayMetrics().widthPixels;
             float density=context.getResources().getDisplayMetrics().density;
-            float startMargin=65*density;
+            float edgeSize=65*density;
             if(event==MotionEvent.ACTION_DOWN){
-                float x=motion.getRawX();
-                boolean edge=x<startMargin || x>screenWidth-startMargin;
-                synchronized(state){state.put(owner,new Gesture(x,motion.getRawY(),SystemClock.uptimeMillis(),edge));}
+                float x=motion.getRawX(),y=motion.getRawY();
+                boolean edge=x<=edgeSize||x>=screenWidth-edgeSize;
+                synchronized(state){state.put(owner,new Gesture(x,y,edge));}
                 return;
             }
             Gesture g;
             synchronized(state){g=state.get(owner);}
-            if(g==null || !g.edge)return;
-            if(event==MotionEvent.ACTION_UP || event==MotionEvent.ACTION_CANCEL){
+            if(g==null||!g.edge)return;
+            if(event==MotionEvent.ACTION_UP||event==MotionEvent.ACTION_CANCEL){
+                cancelPending(g);
                 synchronized(state){state.remove(owner);}
-                if(g.triggered)consume(p);
+                if(g.triggered)consume(p); // Sidebar gesture replaces normal back only after hold.
                 return;
             }
             if(event!=MotionEvent.ACTION_MOVE)return;
             if(g.triggered){consume(p);return;}
             float dx=motion.getRawX()-g.startX;
             float dy=motion.getRawY()-g.startY;
-            long elapsed=SystemClock.uptimeMillis()-g.downMillis;
-            float inward=g.startX<screenWidth/2f?dx:-dx;
-            // Waiting on the edge before moving keeps ordinary quick Back swipes intact.
-            if(elapsed<330){
-                if(Math.abs(dx)>13*density || Math.abs(dy)>28*density)g.aborted=true;
+            float inward=(g.startX<screenWidth/2f)?dx:-dx;
+            if(Math.abs(dy)>75*density || inward<0){
+                cancelPending(g);
+                g.candidate=false;
                 return;
             }
-            if(g.aborted || Math.abs(dy)>115*density)return;
-            if(inward<37*density)return;
-            g.triggered=true;
-            if(SystemClock.elapsedRealtime()-lastSentElapsed>650){
-                lastSentElapsed=SystemClock.elapsedRealtime();
-                sendGesture(context,Math.round(g.startY));
+            if(inward>=32*density){
+                if(!g.candidate){
+                    g.candidate=true;
+                    g.lastInward=inward;
+                    g.lastY=motion.getRawY();
+                    scheduleHold(context,owner,g);
+                }else if(Math.abs(inward-g.lastInward)>20*density){
+                    // Finger is still dragging: hold starts when it pauses.
+                    cancelPending(g);
+                    g.lastInward=inward;
+                    g.lastY=motion.getRawY();
+                    scheduleHold(context,owner,g);
+                }
+            }else if(g.candidate && inward<18*density){
+                cancelPending(g);
+                g.candidate=false;
             }
-            consume(p);
         }catch(Throwable ignored){
-            // Never allow module errors to crash SystemUI or Launcher.
+            // Hooks must never crash the launcher or SystemUI.
         }
+    }
+
+    private static void cancelPending(Gesture gesture){
+        Runnable work=gesture.pending;
+        if(work!=null){MAIN.removeCallbacks(work);gesture.pending=null;}
+    }
+    private static void scheduleHold(Context context,Object owner,Gesture gesture){
+        Runnable r=()->{
+            synchronized(state){
+                if(state.get(owner)!=gesture||!gesture.candidate||gesture.triggered)return;
+                gesture.triggered=true;
+                gesture.pending=null;
+            }
+            long now=SystemClock.elapsedRealtime();
+            if(now-lastSentElapsed>650){
+                lastSentElapsed=now;
+                sendGesture(context,Math.round(gesture.lastY));
+            }
+        };
+        gesture.pending=r;
+        // Swipe to start Back, then pause with finger still down. Unlike the
+        // old code, a short fast swipe is not marked aborted and no new MOVE
+        // events are required during the hold.
+        MAIN.postDelayed(r,330);
     }
 
     private static void consume(XC_MethodHook.MethodHookParam p){
