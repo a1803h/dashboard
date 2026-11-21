@@ -18,6 +18,10 @@ public class SidebarService extends Service {
     private android.content.SharedPreferences prefs;
     private Handler handler=new Handler(Looper.getMainLooper());
     private View iconView,gestureView,panelView;
+    public static final String ACTION_OPEN_PANEL="tj.umed.edgesidebar.lsposed.OPEN_PANEL";
+    public static final String ACTION_REFRESH_CONFIG="tj.umed.edgesidebar.lsposed.REFRESH_CONFIG";
+    private FrameLayout muteButton,dndButton;
+    private ImageView muteImage,dndImage;
     public static final String ACTION_HOOK_GESTURE="tj.umed.edgesidebar.lsposed.ACTION_HOOK_GESTURE";
     private long lastHookGesture=0;
     private final BroadcastReceiver hookCommands=new BroadcastReceiver(){
@@ -48,19 +52,34 @@ public class SidebarService extends Service {
         audio=(AudioManager)getSystemService(AUDIO_SERVICE);
         notifications=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         prefs=getSharedPreferences("sidebar",MODE_PRIVATE);
+        // User-controlled modes are independent of vendor ringer changes when DND toggles.
+        if(!prefs.contains("mute_enabled"))
+            prefs.edit().putBoolean("mute_enabled",audio.getRingerMode()!=AudioManager.RINGER_MODE_NORMAL).apply();
+        if(!prefs.contains("dnd_enabled"))
+            prefs.edit().putBoolean("dnd_enabled",notifications.getCurrentInterruptionFilter()!=NotificationManager.INTERRUPTION_FILTER_ALL).apply();
         IntentFilter filter=new IntentFilter(ACTION_HOOK_GESTURE);
         if(Build.VERSION.SDK_INT>=33)registerReceiver(hookCommands,filter,Context.RECEIVER_EXPORTED);
         else registerReceiver(hookCommands,filter);
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
-        if(!prefs.getBoolean("enabled",false) || !Settings.canDrawOverlays(this)){stopSelf();return START_NOT_STICKY;}
+        if(!prefs.getBoolean("enabled",false) || !Settings.canDrawOverlays(this)){
+            stopSelf();return START_NOT_STICKY;
+        }
         startForeground(41,notification());
-        if(panelOpen){hidePanel();}else rebuildHandles();
+        String action=intent==null?null:intent.getAction();
+        if(ACTION_OPEN_PANEL.equals(action)){
+            if(panelOpen)touch();
+            else showPanel(true,screenH()/2);
+        }else if(ACTION_REFRESH_CONFIG.equals(action)){
+            if(panelOpen)showPanel(false,lastY);
+            else rebuildHandles();
+        }else if(!panelOpen)rebuildHandles();
         return START_STICKY;
     }
     private Notification notification(){
         if(Build.VERSION.SDK_INT>=26)notifications.createNotificationChannel(new NotificationChannel(CHANNEL,"Edge Sidebar",NotificationManager.IMPORTANCE_LOW));
         Intent open=new Intent(this,MainActivity.class);
+        open.putExtra(MainActivity.EXTRA_SETTINGS,true);
         PendingIntent pi=PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification.Builder builder=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CHANNEL):new Notification.Builder(this);
         return builder.setSmallIcon(android.R.drawable.ic_menu_manage).setContentTitle("Edge Sidebar")
@@ -87,34 +106,32 @@ public class SidebarService extends Service {
     }
     private void remove(View v){if(v!=null){try{wm.removeViewImmediate(v);}catch(Exception ignored){}}}
     private void rebuildHandles(){
+        // No floating indicator. Home-screen launcher icon is the normal launcher.
         remove(iconView);remove(gestureView);iconView=null;gestureView=null;
-        if(!prefs.getBoolean("enabled",false) || !Settings.canDrawOverlays(this))return;
-        LinearLayout tab=new LinearLayout(this);
-        tab.setGravity(Gravity.CENTER);tab.setBackground(shape(0xe82b2c31,14));
-        TextView arrow=new TextView(this);arrow.setText(right()?"‹":"›");
-        arrow.setTextSize(26);arrow.setTextColor(0xffeeeeee);arrow.setGravity(Gravity.CENTER);
-        tab.addView(arrow,new LinearLayout.LayoutParams(dp(26),dp(42)));
-        tab.setContentDescription("Открыть Edge Sidebar");
-        tab.setOnClickListener(v->showPanel(true,screenH()/2));
-        try{iconView=tab;wm.addView(iconView,params(dp(26),dp(42),dp(22),screenH()/2-dp(21)));}catch(Exception ignored){iconView=null;}
-        if(prefs.getBoolean("gesture",true) && prefs.getBoolean("edge_overlay_fallback",false)){
+        if(!prefs.getBoolean("enabled",false)||!Settings.canDrawOverlays(this))return;
+        if(prefs.getBoolean("gesture",true)&&prefs.getBoolean("edge_overlay_fallback",false)){
             View stripe=new View(this){
                 private float sx,sy;
-                @Override public boolean onTouchEvent(android.view.MotionEvent ev){
-                    if(ev.getActionMasked()==MotionEvent.ACTION_DOWN){sx=ev.getRawX();sy=ev.getRawY();return true;}
-                    if(ev.getActionMasked()==MotionEvent.ACTION_MOVE){
-                        float delta=ev.getRawX()-sx;
-                        if((right() && delta<-dp(26)) || (!right() && delta>dp(26))){
-                            showPanel(false,(int)sy);return true;
-                        }
-                        return true;
+                @Override public boolean onTouchEvent(MotionEvent ev){
+                    switch(ev.getActionMasked()){
+                        case MotionEvent.ACTION_DOWN:
+                            sx=ev.getRawX();sy=ev.getRawY();return true;
+                        case MotionEvent.ACTION_MOVE:
+                            float delta=ev.getRawX()-sx;
+                            if((right()&&delta<-dp(26))||(!right()&&delta>dp(26))){
+                                showPanel(false,(int)sy);return true;
+                            }
+                            return true;
+                        default:return true;
                     }
-                    return true;
                 }
             };
             stripe.setBackgroundColor(Color.TRANSPARENT);
-            int sh=screenH();int h=(int)(sh*0.58f);
-            try{gestureView=stripe;wm.addView(gestureView,params(dp(20),h,0,(sh-h)/2));}catch(Exception ignored){gestureView=null;}
+            int sh=screenH(),h=(int)(sh*0.58f);
+            try{
+                gestureView=stripe;
+                wm.addView(gestureView,params(dp(20),h,0,(sh-h)/2));
+            }catch(Exception ignored){gestureView=null;}
         }
     }
     private TextView glyph(String value,int size,int color){
@@ -157,7 +174,10 @@ public class SidebarService extends Service {
         try{panelView=outer;wm.addView(panelView,params(fig(352),fig(802),fig(10),top));touch();}
         catch(Exception ignored){panelView=null;panelOpen=false;rebuildHandles();}
     }
-    private int fig(float figmaPixels){return dp(figmaPixels/2.72f);}
+    private int fig(float figmaPixels){
+        float scale=prefs==null?1f:prefs.getInt("scale_percent",100)/100f;
+        return dp((figmaPixels/2.72f)*scale);
+    }
     private static final int FIGMA_BG=0xff353535;
     private static final int FIGMA_IDLE=0xff323232;
     private static final int FIGMA_BLUE=0xff0086f8;
@@ -168,7 +188,7 @@ public class SidebarService extends Service {
     private LinearLayout makeAppRail(){
         LinearLayout base=new LinearLayout(this);
         base.setOrientation(LinearLayout.VERTICAL);
-        base.setBackground(shape(FIGMA_BG,16));
+        base.setBackground(MainActivity.round(FIGMA_BG,fig(42)));
         base.setClipToOutline(true);
         base.setElevation(fig(15));
         ScrollView scroll=new ScrollView(this);
@@ -185,7 +205,9 @@ public class SidebarService extends Service {
             TextView placeholder=glyph("+",28,0xffeeeeee);
             placeholder.setOnClickListener(v->{
                 hidePanel();
-                startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                startActivity(new Intent(this,MainActivity.class)
+                    .putExtra(MainActivity.EXTRA_SETTINGS,true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             });
             LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(fig(110),fig(110));
             stack.addView(placeholder,ip);
@@ -208,8 +230,17 @@ public class SidebarService extends Service {
                 return true;
             });
         }
-        TextView settings=glyph("Settings",7,Color.WHITE);
-        settings.setBackground(shape(0xff6e6e6e,10));
+        View settings=new View(this){
+            private final Paint pen=new Paint(Paint.ANTI_ALIAS_FLAG);
+            @Override protected void onDraw(Canvas c){
+                super.onDraw(c);
+                pen.setColor(0xff6e6e6e);
+                float r=fig(27);
+                c.drawRoundRect(0,0,getWidth(),getHeight(),r,r,pen);
+                pen.setColor(FIGMA_PALE);
+                for(int i=0;i<3;i++)c.drawCircle(fig(28+27*i),fig(21),fig(7.5f),pen);
+            }
+        };
         settings.setContentDescription("Настройки Edge Sidebar");
         settings.setOnClickListener(v->{
             hidePanel();
