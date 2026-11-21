@@ -6,7 +6,11 @@
  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
  <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent></queries>
- <application android:label="Edge Sidebar" android:icon="@android:drawable/ic_menu_manage" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+ <application android:label="Edge Sidebar LSPosed" android:icon="@android:drawable/ic_menu_manage" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+  <meta-data android:name="xposedmodule" android:value="true" />
+  <meta-data android:name="xposeddescription" android:value="Edge Sidebar: MIUI gestures and system recents hooks" />
+  <meta-data android:name="xposedminversion" android:value="82" />
+  <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
   <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
   <service android:name=".SidebarService" android:exported="false" android:stopWithTask="false" />
  </application>
