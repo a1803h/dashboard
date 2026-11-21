@@ -17,6 +17,11 @@
       android:excludeFromRecents="true" android:noHistory="true">
      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
   </activity>
+  <receiver android:name=".BackSideReceiver" android:exported="true">
+    <intent-filter>
+      <action android:name="tj.umed.edgesidebar.lsposed.ACTION_LAST_BACK_SIDE"/>
+    </intent-filter>
+  </receiver>
   <service android:name=".SidebarService" android:exported="false" android:stopWithTask="false" />
  </application>
 </manifest>
