@@ -18,6 +18,25 @@ public class SidebarService extends Service {
     private android.content.SharedPreferences prefs;
     private Handler handler=new Handler(Looper.getMainLooper());
     private View iconView,gestureView,panelView;
+    public static final String ACTION_HOOK_GESTURE="tj.umed.edgesidebar.lsposed.ACTION_HOOK_GESTURE";
+    private long lastHookGesture=0;
+    private final BroadcastReceiver hookCommands=new BroadcastReceiver(){
+      @Override public void onReceive(Context context,Intent intent){
+        if(!ACTION_HOOK_GESTURE.equals(intent.getAction()) || !prefs.getBoolean("enabled",false) || !prefs.getBoolean("gesture",true))return;
+        if(SystemClock.elapsedRealtime()-lastHookGesture<650)return;
+        lastHookGesture=SystemClock.elapsedRealtime();
+        String[] recents=intent.getStringArrayExtra("recents");
+        if(recents!=null && recents.length>0){
+          StringBuilder sb=new StringBuilder();
+          for(String name:recents){if(name!=null && name.matches("[a-zA-Z0-9_.]{3,200}") && !name.equals(getPackageName())){
+             if(sb.length()>0)sb.append("\\n");sb.append(name);
+          }}
+          prefs.edit().putString("hook_recents",sb.toString()).putLong("hook_recents_at",System.currentTimeMillis()).putLong("hook_active_at",System.currentTimeMillis()).apply();
+        }else prefs.edit().putLong("hook_active_at",System.currentTimeMillis()).apply();
+        int rawY=intent.getIntExtra("rawY",screenH()/2);
+        showPanel(false,Math.max(dp(25),Math.min(rawY,screenH()-dp(25))));
+      }
+    };
     private Runnable dismiss=()->hidePanel();
     private boolean panelOpen=false;
     private int lastY=0;
@@ -29,6 +48,9 @@ public class SidebarService extends Service {
         audio=(AudioManager)getSystemService(AUDIO_SERVICE);
         notifications=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         prefs=getSharedPreferences("sidebar",MODE_PRIVATE);
+        IntentFilter filter=new IntentFilter(ACTION_HOOK_GESTURE);
+        if(Build.VERSION.SDK_INT>=33)registerReceiver(hookCommands,filter,Context.RECEIVER_EXPORTED);
+        else registerReceiver(hookCommands,filter);
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         if(!prefs.getBoolean("enabled",false) || !Settings.canDrawOverlays(this)){stopSelf();return START_NOT_STICKY;}
@@ -75,7 +97,7 @@ public class SidebarService extends Service {
         tab.setContentDescription("Открыть Edge Sidebar");
         tab.setOnClickListener(v->showPanel(true,screenH()/2));
         try{iconView=tab;wm.addView(iconView,params(dp(26),dp(42),dp(22),screenH()/2-dp(21)));}catch(Exception ignored){iconView=null;}
-        if(prefs.getBoolean("gesture",true)){
+        if(prefs.getBoolean("gesture",true) && prefs.getBoolean("edge_overlay_fallback",false)){
             View stripe=new View(this){
                 private float sx,sy;
                 @Override public boolean onTouchEvent(android.view.MotionEvent ev){
@@ -275,7 +297,7 @@ public class SidebarService extends Service {
     }
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);if(panelOpen)hidePanel();else rebuildHandles();}
     @Override public void onDestroy(){
-        handler.removeCallbacks(dismiss);remove(iconView);remove(gestureView);remove(panelView);
+        handler.removeCallbacks(dismiss);try{unregisterReceiver(hookCommands);}catch(Exception ignored){}remove(iconView);remove(gestureView);remove(panelView);
         iconView=null;gestureView=null;panelView=null;super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent){return null;}
