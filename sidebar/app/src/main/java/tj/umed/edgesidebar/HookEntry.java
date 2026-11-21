@@ -155,7 +155,6 @@ public final class HookEntry implements IXposedHookLoadPackage {
                     if(!(task instanceof ActivityManager.RecentTaskInfo))continue;
                     ActivityManager.RecentTaskInfo info=(ActivityManager.RecentTaskInfo)task;
                     ComponentName comp=info.topActivity;
-                    if(comp==null)comp=info.realActivity;
                     if(comp==null && info.baseIntent!=null)comp=info.baseIntent.getComponent();
                     if(comp==null)continue;
                     String pkg=comp.getPackageName();
