@@ -47,7 +47,7 @@ public final class AppRepository {
         long hookAge=System.currentTimeMillis()-p.getLong("hook_recents_at",0);
         HashMap<String,Integer> hookOrder=new HashMap<>();
         if(!hookValue.isEmpty() && hookAge>=0 && hookAge<120000L){
-            String[] names=hookValue.split("\\n");
+            String[] names=hookValue.split("\\\\|");
             for(int i=0;i<names.length;i++)if(!hookOrder.containsKey(names[i]))hookOrder.put(names[i],i);
         }
         ArrayList<Map.Entry<String,Long>> ranked=new ArrayList<>(recent.entrySet());
