@@ -5,6 +5,7 @@ import android.app.Application;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.UserHandle;
 import android.view.MotionEvent;
 
 import java.util.ArrayList;
