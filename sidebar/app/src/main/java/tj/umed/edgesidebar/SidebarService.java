@@ -17,7 +17,7 @@ public class SidebarService extends Service {
     private NotificationManager notifications;
     private android.content.SharedPreferences prefs;
     private Handler handler=new Handler(Looper.getMainLooper());
-    private View iconView,gestureView,panelView;
+    private View iconView,gestureView,gestureViewRight,panelView;
     public static final String ACTION_OPEN_PANEL="tj.umed.edgesidebar.lsposed.OPEN_PANEL";
     public static final String ACTION_REFRESH_CONFIG="tj.umed.edgesidebar.lsposed.REFRESH_CONFIG";
     private FrameLayout muteButton,dndButton;
@@ -38,12 +38,16 @@ public class SidebarService extends Service {
           prefs.edit().putString("hook_recents",sb.toString()).putLong("hook_recents_at",System.currentTimeMillis()).putLong("hook_active_at",System.currentTimeMillis()).apply();
         }else prefs.edit().putLong("hook_active_at",System.currentTimeMillis()).apply();
         int rawY=intent.getIntExtra("rawY",screenH()/2);
-        showPanel(false,Math.max(dp(25),Math.min(rawY,screenH()-dp(25))));
+        // The side comes from the origin of the actual Back gesture.
+        // Do not use the configured launcher-icon side here.
+        boolean fromRight=intent.getBooleanExtra("gesture_from_right",right());
+        showPanel(false,Math.max(dp(25),Math.min(rawY,screenH()-dp(25))),fromRight);
       }
     };
     private Runnable dismiss=()->hidePanel();
     private boolean panelOpen=false;
     private int lastY=0;
+    private boolean panelRight=false;
     private static final int DARK=0xff353535, DARKER=0xff292929, BLUE=0xff078efa;
     private static final String CHANNEL="sidebar_service";
 
@@ -71,7 +75,7 @@ public class SidebarService extends Service {
             if(panelOpen)touch();
             else showPanel(true,screenH()/2);
         }else if(ACTION_REFRESH_CONFIG.equals(action)){
-            if(panelOpen)showPanel(false,lastY);
+            if(panelOpen)showPanel(false,lastY,panelRight);
             else rebuildHandles();
         }else if(!panelOpen)rebuildHandles();
         return START_STICKY;
@@ -97,42 +101,54 @@ public class SidebarService extends Service {
     }
     private boolean right(){return prefs.getBoolean("right",false);}
     private WindowManager.LayoutParams params(int width,int height,int x,int y){
+        return params(width,height,x,y,right());
+    }
+    private WindowManager.LayoutParams params(int width,int height,int x,int y,boolean rightSide){
         WindowManager.LayoutParams p=new WindowManager.LayoutParams(width,height,
             Build.VERSION.SDK_INT>=26?WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             android.graphics.PixelFormat.TRANSLUCENT);
-        p.gravity=Gravity.TOP|(right()?Gravity.RIGHT:Gravity.LEFT);
+        p.gravity=Gravity.TOP|(rightSide?Gravity.RIGHT:Gravity.LEFT);
         p.x=x;p.y=y;p.setTitle("Edge Sidebar");return p;
     }
     private void remove(View v){if(v!=null){try{wm.removeViewImmediate(v);}catch(Exception ignored){}}}
     private void rebuildHandles(){
-        // No floating indicator. Home-screen launcher icon is the normal launcher.
-        remove(iconView);remove(gestureView);iconView=null;gestureView=null;
+        // Neither edge receives a visible handle. Fallback zones are opt-in.
+        remove(iconView);remove(gestureView);remove(gestureViewRight);
+        iconView=null;gestureView=null;gestureViewRight=null;
         if(!prefs.getBoolean("enabled",false)||!Settings.canDrawOverlays(this))return;
         if(prefs.getBoolean("gesture",true)&&prefs.getBoolean("edge_overlay_fallback",false)){
-            View stripe=new View(this){
-                private float sx,sy;
-                @Override public boolean onTouchEvent(MotionEvent ev){
-                    switch(ev.getActionMasked()){
-                        case MotionEvent.ACTION_DOWN:
-                            sx=ev.getRawX();sy=ev.getRawY();return true;
-                        case MotionEvent.ACTION_MOVE:
-                            float delta=ev.getRawX()-sx;
-                            if((right()&&delta<-dp(26))||(!right()&&delta>dp(26))){
-                                showPanel(false,(int)sy);return true;
-                            }
-                            return true;
-                        default:return true;
-                    }
-                }
-            };
-            stripe.setBackgroundColor(Color.TRANSPARENT);
-            int sh=screenH(),h=(int)(sh*0.58f);
+            int sh=screenH(),h=(int)(sh*0.58f),y=(sh-h)/2;
             try{
-                gestureView=stripe;
-                wm.addView(gestureView,params(dp(20),h,0,(sh-h)/2));
+                gestureView=makeFallbackZone(false);
+                wm.addView(gestureView,params(dp(20),h,0,y,false));
             }catch(Exception ignored){gestureView=null;}
+            try{
+                gestureViewRight=makeFallbackZone(true);
+                wm.addView(gestureViewRight,params(dp(20),h,0,y,true));
+            }catch(Exception ignored){gestureViewRight=null;}
         }
+    }
+    private View makeFallbackZone(final boolean fromRight){
+        return new View(this){
+            private float startX,startY;
+            private boolean opened;
+            @Override public boolean onTouchEvent(MotionEvent ev){
+                switch(ev.getActionMasked()){
+                    case MotionEvent.ACTION_DOWN:
+                        startX=ev.getRawX();startY=ev.getRawY();opened=false;return true;
+                    case MotionEvent.ACTION_MOVE:
+                        if(opened)return true;
+                        float dx=ev.getRawX()-startX;
+                        if((fromRight && dx<-dp(26))||(!fromRight && dx>dp(26))){
+                            opened=true;
+                            showPanel(false,(int)startY,fromRight);
+                        }
+                        return true;
+                    default:return true;
+                }
+            }
+        };
     }
     private TextView glyph(String value,int size,int color){
         TextView v=new TextView(this);v.setText(value);v.setGravity(Gravity.CENTER);
@@ -149,34 +165,56 @@ public class SidebarService extends Service {
         rebuildHandles();
     }
     private void showPanel(boolean iconLaunch,int y){
+        showPanel(iconLaunch,y,right());
+    }
+    private void showPanel(boolean iconLaunch,int y,boolean fromRight){
         handler.removeCallbacks(dismiss);
-        remove(iconView);remove(gestureView);
-        iconView=null;gestureView=null;
+        remove(iconView);remove(gestureView);remove(gestureViewRight);
+        iconView=null;gestureView=null;gestureViewRight=null;
         remove(panelView);panelView=null;panelOpen=true;
         lastY=y;
+        panelRight=fromRight;
+
+        final int appWidth=figApp(182),appHeight=figApp(802);
+        final int volWidth=fig(142),volHeight=fig(802),gap=fig(28);
+        final int fullWidth=appWidth+volWidth+gap;
+        final int fullHeight=Math.max(appHeight,volHeight);
+
         LinearLayout outer=new LinearLayout(this);
         outer.setOrientation(LinearLayout.HORIZONTAL);
         outer.setClipChildren(false);
         LinearLayout apps=makeAppRail();
         LinearLayout volume=makeVolumeRail();
-        if(right()){
-            outer.addView(apps,new LinearLayout.LayoutParams(fig(182),fig(802)));
-            addGap(outer,fig(28));
-            outer.addView(volume,new LinearLayout.LayoutParams(fig(142),fig(802)));
+        if(fromRight){
+            outer.addView(apps,new LinearLayout.LayoutParams(appWidth,appHeight));
+            addGap(outer,gap);
+            outer.addView(volume,new LinearLayout.LayoutParams(volWidth,volHeight));
         }else{
-            outer.addView(volume,new LinearLayout.LayoutParams(fig(142),fig(802)));
-            addGap(outer,fig(28));
-            outer.addView(apps,new LinearLayout.LayoutParams(fig(182),fig(802)));
+            outer.addView(volume,new LinearLayout.LayoutParams(volWidth,volHeight));
+            addGap(outer,gap);
+            outer.addView(apps,new LinearLayout.LayoutParams(appWidth,appHeight));
         }
         int height=screenH();
-        int center=(iconLaunch || prefs.getBoolean("fixed",false))?height/2:y;
-        int top=Math.max(fig(45),Math.min(center-fig(401),height-fig(855)));
-        try{panelView=outer;wm.addView(panelView,params(fig(352),fig(802),fig(10),top));touch();}
-        catch(Exception ignored){panelView=null;panelOpen=false;rebuildHandles();}
+        int center=(iconLaunch||prefs.getBoolean("fixed",false))?height/2:y;
+        int maxTop=Math.max(0,height-fullHeight-fig(35));
+        int top=Math.max(0,Math.min(center-fullHeight/2,maxTop));
+        int preferredEdge=dp(Math.max(0,prefs.getInt("edge_offset_dp",4)));
+        int edge=Math.min(preferredEdge,Math.max(0,screenW()-fullWidth));
+        try{
+            panelView=outer;
+            wm.addView(panelView,params(fullWidth,fullHeight,edge,top,fromRight));
+            touch();
+        }catch(Exception ignored){
+            panelView=null;panelOpen=false;rebuildHandles();
+        }
     }
     private int fig(float figmaPixels){
         float scale=prefs==null?1f:prefs.getInt("scale_percent",100)/100f;
         return dp((figmaPixels/2.72f)*scale);
+    }
+    private int figApp(float figmaPixels){
+        float appScale=Math.max(0.6f,Math.min(1.6f,prefs.getInt("app_scale_percent",100)/100f));
+        return Math.max(1,Math.round(fig(figmaPixels)*appScale));
     }
     private static final int FIGMA_BG=0xff353535;
     private static final int FIGMA_IDLE=0xff323232;
@@ -188,9 +226,9 @@ public class SidebarService extends Service {
     private LinearLayout makeAppRail(){
         LinearLayout base=new LinearLayout(this);
         base.setOrientation(LinearLayout.VERTICAL);
-        base.setBackground(MainActivity.round(FIGMA_BG,fig(42)));
+        base.setBackground(MainActivity.round(FIGMA_BG,figApp(42)));
         base.setClipToOutline(true);
-        base.setElevation(fig(15));
+        base.setElevation(figApp(15));
         ScrollView scroll=new ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setFillViewport(true);
@@ -198,7 +236,7 @@ public class SidebarService extends Service {
         LinearLayout stack=new LinearLayout(this);
         stack.setGravity(Gravity.TOP|Gravity.CENTER_HORIZONTAL);
         stack.setOrientation(LinearLayout.VERTICAL);
-        stack.setPadding(0,fig(36),0,fig(36));
+        stack.setPadding(0,figApp(36),0,figApp(36));
         scroll.addView(stack,new ScrollView.LayoutParams(-1,-2));
         ArrayList<AppRepository.Item> items=AppRepository.ordered(this);
         if(items.isEmpty()){
@@ -209,7 +247,7 @@ public class SidebarService extends Service {
                     .putExtra(MainActivity.EXTRA_SETTINGS,true)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             });
-            LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(fig(110),fig(110));
+            LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(figApp(110),figApp(110));
             stack.addView(placeholder,ip);
         }
         for(AppRepository.Item app:items){
@@ -218,8 +256,8 @@ public class SidebarService extends Service {
             catch(Exception e){icon.setImageResource(android.R.drawable.sym_def_app_icon);}
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
             icon.setContentDescription(app.title);
-            LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(fig(110),fig(110));
-            ip.bottomMargin=fig(36);
+            LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(figApp(110),figApp(110));
+            ip.bottomMargin=figApp(36);
             stack.addView(icon,ip);
             icon.setOnClickListener(v->launchApp(app.pkg));
             icon.setOnLongClickListener(v->{
@@ -235,10 +273,10 @@ public class SidebarService extends Service {
             @Override protected void onDraw(Canvas c){
                 super.onDraw(c);
                 pen.setColor(0xff6e6e6e);
-                float r=fig(27);
+                float r=figApp(27);
                 c.drawRoundRect(0,0,getWidth(),getHeight(),r,r,pen);
                 pen.setColor(FIGMA_PALE);
-                for(int i=0;i<3;i++)c.drawCircle(fig(28+27*i),fig(21),fig(7.5f),pen);
+                for(int i=0;i<3;i++)c.drawCircle(figApp(28+27*i),figApp(21),figApp(7.5f),pen);
             }
         };
         settings.setContentDescription("Настройки Edge Sidebar");
@@ -248,7 +286,7 @@ public class SidebarService extends Service {
                 .putExtra(MainActivity.EXTRA_SETTINGS,true)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         });
-        stack.addView(settings,new LinearLayout.LayoutParams(fig(110),fig(42)));
+        stack.addView(settings,new LinearLayout.LayoutParams(figApp(110),figApp(42)));
         base.addView(scroll,new LinearLayout.LayoutParams(-1,-1));
         return base;
     }
@@ -428,7 +466,7 @@ public class SidebarService extends Service {
     }
     @Override public void onConfigurationChanged(android.content.res.Configuration c){super.onConfigurationChanged(c);if(panelOpen)hidePanel();else rebuildHandles();}
     @Override public void onDestroy(){
-        handler.removeCallbacks(dismiss);try{unregisterReceiver(hookCommands);}catch(Exception ignored){}remove(iconView);remove(gestureView);remove(panelView);
+        handler.removeCallbacks(dismiss);try{unregisterReceiver(hookCommands);}catch(Exception ignored){}remove(iconView);remove(gestureView);remove(gestureViewRight);remove(panelView);
         iconView=null;gestureView=null;panelView=null;super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent){return null;}
